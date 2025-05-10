@@ -1,11 +1,20 @@
 // client/src/context/StoryProvider.tsx
 import React, { useReducer, ReactNode } from 'react';
-import { StoryNode, StoryLink, StoryState } from './StoryTypes';
-import { StoryContext } from './StoryContextDefinition';
-import { storyReducer, initialState } from './StoryReducer';
+import { StoryContext } from './context';
+import { 
+  StoryNode, 
+  StoryLink, 
+  StoryState,
+  StoryContextType
+} from './StoryContext';
+
+// These are imported from StoryContext.tsx but with a direct import
+// to avoid circular dependencies
+import storyReducer from './storyReducer';
+import initialState from './initialState';
 
 // Create context provider
-export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(storyReducer, initialState);
 
   const visitNode = (nodeId: string) => {
@@ -48,7 +57,7 @@ export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     );
   };
 
-  const value = {
+  const value: StoryContextType = {
     state,
     visitNode,
     revealNode,

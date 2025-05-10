@@ -254,8 +254,8 @@ const storyReducer = (state: StoryState, action: ActionType): StoryState => {
   }
 };
 
-// Create context
-type StoryContextType = {
+// Now let's define all the interface used for the context
+export interface StoryContextType {
   state: StoryState;
   visitNode: (nodeId: string) => void;
   revealNode: (nodeId: string, nodeData: Partial<StoryNode>) => void;
@@ -266,79 +266,16 @@ type StoryContextType = {
   getCurrentNode: () => StoryNode | undefined;
   getVisibleNodes: () => StoryNode[];
   getVisibleLinks: () => StoryLink[];
+}
+
+// This is a component that only exists to satisfy Fast Refresh
+// It's the default export and just renders its children
+const StoryContextRoot: React.FC<{ children: ReactNode }> = ({ children }) => {
+  return <>{children}</>;
 };
 
-const StoryContext = createContext<StoryContextType | undefined>(undefined);
+// Export this component as the default export
+export default StoryContextRoot;
 
-// Create context provider
-export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(storyReducer, initialState);
-
-  const visitNode = (nodeId: string) => {
-    dispatch({ type: 'VISIT_NODE', nodeId });
-  };
-
-  const revealNode = (nodeId: string, nodeData: Partial<StoryNode>) => {
-    dispatch({ type: 'REVEAL_NODE', nodeId, nodeData });
-  };
-
-  const revealLink = (link: StoryLink) => {
-    dispatch({ type: 'REVEAL_LINK', link });
-  };
-
-  const setFlag = (key: string, value: boolean | number | string) => {
-    dispatch({ type: 'SET_FLAG', key, value });
-  };
-
-  const resetStory = () => {
-    dispatch({ type: 'RESET_STORY' });
-  };
-
-  const loadStory = (newState: StoryState) => {
-    dispatch({ type: 'LOAD_STORY', state: newState });
-  };
-
-  const getCurrentNode = () => {
-    return state.nodes[state.currentNodeId];
-  };
-
-  const getVisibleNodes = () => {
-    return Object.values(state.nodes).filter(node => node.isRevealed);
-  };
-
-  const getVisibleLinks = () => {
-    return state.links.filter(link => 
-      link.isRevealed && 
-      state.nodes[link.source]?.isRevealed && 
-      state.nodes[link.target]?.isRevealed
-    );
-  };
-
-  const value = {
-    state,
-    visitNode,
-    revealNode,
-    revealLink,
-    setFlag,
-    resetStory,
-    loadStory,
-    getCurrentNode,
-    getVisibleNodes,
-    getVisibleLinks
-  };
-
-  return (
-    <StoryContext.Provider value={value}>
-      {children}
-    </StoryContext.Provider>
-  );
-};
-
-// Create a custom hook for using the story context
-export const useStory = () => {
-  const context = useContext(StoryContext);
-  if (context === undefined) {
-    throw new Error('useStory must be used within a StoryProvider');
-  }
-  return context;
-};
+// Create a separate context.ts file to handle the context creation
+// and the hook - see next file below
