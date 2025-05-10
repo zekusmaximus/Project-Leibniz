@@ -1,103 +1,49 @@
-// Updated client/src/App.tsx
-
+// client/src/App.tsx (updated to include MiniMap and SaveLoadControls)
 import { useState, useEffect } from 'react';
+import { StoryProvider, useStory } from './context/StoryContext';
+import storyLogicService from './services/StoryLogicService';
 import NodeMap from './components/NodeMap';
+import MiniMap from './components/MiniMap';
+import SaveLoadControls from './components/SaveLoadControls';
 import type { NodeData, LinkData } from './components/NodeMap';
 import './App.css';
 
-// Story segment type for better organization
-interface StorySegment {
-  id: string;
-  text: string;
-  choices?: StoryChoice[];
-  visited: boolean;
-}
-
-interface StoryChoice {
-  targetId: string;
-  text: string;
-  condition?: (state: StoryState) => boolean;
-}
-
-// Game state management
-interface StoryState {
-  currentNodeId: string;
-  visitCounts: Record<string, number>;
-  flags: Record<string, boolean | number | string>;
-}
-
+// Main App component - just wraps StoryProvider around content
 function App() {
-  // State for nodes and links visualization
-  const [nodes, setNodes] = useState<NodeData[]>([
-    { id: 'start', label: 'The Anomaly', x: 400, y: 300, color: 'orange', size: 20, visitedCount: 0 },
-  ]);
-
-  const [links, setLinks] = useState<LinkData[]>([]);
-
-  // State for story and game mechanics
-  const [storyState, setStoryState] = useState<StoryState>({
-    currentNodeId: 'start',
-    visitCounts: { start: 0 },
-    flags: { storyBegan: false }
-  });
-
-  const [currentStoryText, setCurrentStoryText] = useState<string>(
-    "You stand before a shimmering, unstable anomaly. Its surface writhes with colors you've never seen."
+  return (
+    <StoryProvider>
+      <StoryContent />
+    </StoryProvider>
   );
-  
-  // Story content - could be moved to a separate file or database later
-  const storySegments: Record<string, StorySegment> = {
-    'start': {
-      id: 'start',
-      text: "You stand before a shimmering, unstable anomaly. Its surface writhes with colors you've never seen.",
-      choices: [
-        { targetId: 'pathA', text: 'Follow the Path of Whispers' },
-        { targetId: 'pathB', text: 'Follow the Path of Echoes' }
-      ],
-      visited: false
-    },
-    'pathA': {
-      id: 'pathA',
-      text: "The Path of Whispers leads you down a corridor of shifting sounds. Voices speak in languages you almost understand.",
-      choices: [
-        { targetId: 'whisperSource', text: 'Investigate the source of whispers' },
-        { targetId: 'start', text: 'Return to the anomaly' }
-      ],
-      visited: false
-    },
-    'pathB': {
-      id: 'pathB',
-      text: "The Path of Echoes resonates with faint, echoing sounds of events that may or may not have happened.",
-      choices: [
-        { targetId: 'echoChamber', text: 'Follow the loudest echoes' },
-        { targetId: 'start', text: 'Return to the anomaly' }
-      ],
-      visited: false
-    },
-    'whisperSource': {
-      id: 'whisperSource',
-      text: "You find the source of the whispers - a small, pulsating crystal that seems to speak directly to your mind.",
-      choices: [
-        { targetId: 'pathA', text: 'Go back to the corridor' }
-      ],
-      visited: false
-    },
-    'echoChamber': {
-      id: 'echoChamber',
-      text: "The echoes grow louder in this chamber. You see shadowy figures moving just at the edge of your vision.",
-      choices: [
-        { targetId: 'pathB', text: 'Retreat from the chamber' }
-      ],
-      visited: false
-    }
-  };
-  
+}
+
+// Actual content component that uses story context
+function StoryContent() {
+  const { 
+    state, 
+    visitNode, 
+    revealNode, 
+    revealLink, 
+    setFlag, 
+    getVisibleNodes, 
+    getVisibleLinks, 
+    getCurrentNode 
+  } = useStory();
+
+  // Convert story nodes to D3 node format
+  const [d3Nodes, setD3Nodes] = useState<NodeData[]>([]);
+  const [d3Links, setD3Links] = useState<LinkData[]>([]);
+  const [currentStoryText, setCurrentStoryText] = useState<string>("");
+  const [showMiniMap, setShowMiniMap] = useState<boolean>(false);
+  const [zoomTarget, setZoomTarget] = useState<string | undefined>(undefined);
+
   // Responsive sizing
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth * 0.9,
     height: window.innerHeight * 0.6,
   });
 
+  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       setDimensions({
@@ -110,133 +56,209 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Game logic for node interactions
-  const handleNodeClick = (nodeId: string, clickedNodeData: NodeData): void => {
-    console.log('Node clicked:', nodeId, clickedNodeData);
-
-    // 1. Update visit count
-    const newVisitCount = (storyState.visitCounts[nodeId] || 0) + 1;
-    setStoryState(prev => ({
-      ...prev,
-      currentNodeId: nodeId,
-      visitCounts: {
-        ...prev.visitCounts,
-        [nodeId]: newVisitCount
-      }
+  // Update D3 nodes and links when story state changes
+  useEffect(() => {
+    // Convert story nodes to D3 nodes
+    const visibleNodes = getVisibleNodes();
+    const newD3Nodes = visibleNodes.map(node => ({
+      id: node.id,
+      label: node.label,
+      x: node.x || positionNodeOnGraph(node.id, dimensions.width, dimensions.height).x,
+      y: node.y || positionNodeOnGraph(node.id, dimensions.width, dimensions.height).y,
+      color: node.color,
+      size: node.size,
+      visitedCount: node.visitedCount
     }));
 
-    // 2. Update node appearance
-    setNodes(prevNodes => prevNodes.map(node => {
-      if (node.id === nodeId) {
-        return {
-          ...node,
-          visitedCount: newVisitCount,
-          color: newVisitCount > 1 ? '#6a0dad' : node.color, // Change color after first visit
-          size: Math.max(node.size ? node.size * 0.95 : 18, 10) // Don't let it get too small
-        };
-      }
-      return node;
+    // Convert story links to D3 links
+    const visibleLinks = getVisibleLinks();
+    const newD3Links = visibleLinks.map(link => ({
+      source: link.source,
+      target: link.target,
+      color: link.color,
+      width: link.width
     }));
 
-    // 3. Update story text and expand story graph based on node ID and visit count
-    updateStoryForNode(nodeId, newVisitCount);
+    setD3Nodes(newD3Nodes);
+    setD3Links(newD3Links);
+
+    // Show mini-map if we have enough nodes
+    setShowMiniMap(newD3Nodes.length > 5);
+
+    // Update story text
+    const currentNode = getCurrentNode();
+    if (currentNode) {
+      setCurrentStoryText(storyLogicService.getNodeText(currentNode.id, state));
+    }
+
+    // Run story logic rules
+    const stateChanges = storyLogicService.evaluateState(state);
+    
+    // Apply rule effects
+    if (stateChanges.flags) {
+      Object.entries(stateChanges.flags).forEach(([key, value]) => {
+        setFlag(key, value);
+        
+        // Handle special flags that affect the graph
+        handleSpecialFlag(key, value);
+      });
+    }
+  }, [state, dimensions.width, dimensions.height]);
+
+ // Helper function to handle special flags that affect the graph
+  const handleSpecialFlag = (key: string, value: any) => {
+    switch(key) {
+      case 'initialPathsRevealed':
+        if (value === true) {
+          // Reveal paths A and B
+          revealNode('pathA', {
+            x: dimensions.width / 2 + 200,
+            y: dimensions.height / 2 - 100,
+          });
+          revealNode('pathB', {
+            x: dimensions.width / 2 + 200,
+            y: dimensions.height / 2 + 100,
+          });
+          
+          // Reveal links
+          revealLink({ source: 'start', target: 'pathA', color: '#777', isRevealed: true });
+          revealLink({ source: 'start', target: 'pathB', color: '#777', isRevealed: true });
+          revealLink({ source: 'pathA', target: 'start', color: '#777', isRevealed: true });
+          revealLink({ source: 'pathB', target: 'start', color: '#777', isRevealed: true });
+        }
+        break;
+        
+      case 'whisperSourceRevealed':
+        if (value === true) {
+          revealNode('whisperSource', {
+            x: dimensions.width / 2 + 400,
+            y: dimensions.height / 2 - 150,
+          });
+          
+          revealLink({ source: 'pathA', target: 'whisperSource', color: 'skyblue', isRevealed: true });
+          revealLink({ source: 'whisperSource', target: 'pathA', color: 'skyblue', isRevealed: true });
+        }
+        break;
+        
+      case 'echoChamberRevealed':
+        if (value === true) {
+          revealNode('echoChamber', {
+            x: dimensions.width / 2 + 400,
+            y: dimensions.height / 2 + 150,
+          });
+          
+          revealLink({ source: 'pathB', target: 'echoChamber', color: 'lightgreen', isRevealed: true });
+          revealLink({ source: 'echoChamber', target: 'pathB', color: 'lightgreen', isRevealed: true });
+        }
+        break;
+        
+      case 'secretPathDiscovered':
+        if (value === true) {
+          // Create a secret node when a particular path is traveled
+          revealNode('secretNode', {
+            x: dimensions.width / 2 + 300,
+            y: dimensions.height / 2,
+            label: 'Hidden Chamber',
+            text: "You've discovered a hidden chamber between the two paths. The walls shimmer with symbols that seem to shift as you look at them.",
+            color: '#ff5500',
+            size: 18,
+            choices: [
+              { targetId: 'start', text: 'Return to the anomaly' },
+              { targetId: 'whisperSource', text: 'Go to the Source of Whispers' },
+              { targetId: 'echoChamber', text: 'Go to the Echo Chamber' }
+            ]
+          });
+          
+          // Connect the secret node
+          revealLink({ source: 'secretNode', target: 'whisperSource', color: '#ff5500', isRevealed: true });
+          revealLink({ source: 'secretNode', target: 'echoChamber', color: '#ff5500', isRevealed: true });
+          revealLink({ source: 'secretNode', target: 'start', color: '#ff5500', isRevealed: true });
+          
+          // Set zoom target to the new node
+          setZoomTarget('secretNode');
+        }
+        break;
+        
+      case 'bothPathsVisited':
+        if (value === true) {
+          // Update the start node appearance to indicate progression
+          revealNode('start', {
+            color: '#9900cc', // Change color to indicate progression
+            text: "The anomaly pulses with new energy now that you've explored both paths. It feels more stable, yet somehow more complex."
+          });
+        }
+        break;
+    }
   };
 
-  // Helper function to update story based on node visits
-  const updateStoryForNode = (nodeId: string, visitCount: number) => {
-    const storySegment = storySegments[nodeId];
-    if (!storySegment) return;
-
-    // Set current story text
-    setCurrentStoryText(storySegment.text);
+  // Helper function to determine node positions
+  const positionNodeOnGraph = (nodeId: string, width: number, height: number) => {
+    // Default to center
+    let x = width / 2;
+    let y = height / 2;
     
-    // Only add new nodes on first visit
-    if (visitCount === 1) {
-      const newNodesToAdd: NodeData[] = [];
-      const newLinksToAdd: LinkData[] = [];
+    // You can customize positions based on node ID or other factors
+    switch(nodeId) {
+      case 'start':
+        x = width / 2;
+        y = height / 2;
+        break;
+      case 'pathA':
+        x = width / 2 + 200;
+        y = height / 2 - 100;
+        break;
+      case 'pathB':
+        x = width / 2 + 200;
+        y = height / 2 + 100;
+        break;
+      case 'whisperSource':
+        x = width / 2 + 400;
+        y = height / 2 - 150;
+        break;
+      case 'echoChamber':
+        x = width / 2 + 400;
+        y = height / 2 + 150;
+        break;
+      case 'secretNode':
+        x = width / 2 + 300;
+        y = height / 2;
+        break;
+      // Add more cases for other nodes
+    }
+    
+    return { x, y };
+  };
 
-      // Node-specific story logic
-      switch (nodeId) {
-        case 'start':
-          // First time visiting the start node
-          newNodesToAdd.push(
-            { 
-              id: 'pathA', 
-              label: 'Path of Whispers', 
-              x: dimensions.width / 2 + 200, 
-              y: dimensions.height / 2 - 100, 
-              color: 'skyblue', 
-              size: 15, 
-              visitedCount: 0 
-            },
-            { 
-              id: 'pathB', 
-              label: 'Path of Echoes', 
-              x: dimensions.width / 2 + 200, 
-              y: dimensions.height / 2 + 100, 
-              color: 'lightgreen', 
-              size: 15, 
-              visitedCount: 0 
-            }
-          );
-          newLinksToAdd.push(
-            { source: 'start', target: 'pathA', color: '#777' },
-            { source: 'start', target: 'pathB', color: '#777' }
-          );
-          break;
-        
-        case 'pathA':
-          newNodesToAdd.push({ 
-            id: 'whisperSource', 
-            label: 'Source of Whispers', 
-            x: dimensions.width / 2 + 400, 
-            y: dimensions.height / 2 - 150, 
-            color: '#ADD8E6', 
-            size: 12, 
-            visitedCount: 0 
-          });
-          newLinksToAdd.push({ source: 'pathA', target: 'whisperSource', color: 'skyblue' });
-          break;
-        
-        case 'pathB':
-          newNodesToAdd.push({ 
-            id: 'echoChamber', 
-            label: 'Echo Chamber', 
-            x: dimensions.width / 2 + 400, 
-            y: dimensions.height / 2 + 150, 
-            color: '#90EE90', 
-            size: 12, 
-            visitedCount: 0 
-          });
-          newLinksToAdd.push({ source: 'pathB', target: 'echoChamber', color: 'lightgreen' });
-          break;
-        
-        // Add more cases as needed for other nodes
+  // Handle node click in visualization
+  const handleNodeClick = (nodeId: string, clickedNodeData: NodeData) => {
+    console.log('Node clicked:', nodeId, clickedNodeData);
+    visitNode(nodeId);
+    setZoomTarget(nodeId);
+    
+    // Clear zoom target after animation
+    setTimeout(() => setZoomTarget(undefined), 1000);
+  };
+  
+  // Handle mini-map click for navigation
+  const handleMiniMapClick = (x: number, y: number) => {
+    // Find the closest node to the clicked point
+    let closestNode: NodeData | undefined;
+    let minDistance = Infinity;
+    
+    d3Nodes.forEach(node => {
+      const dx = (node.x || 0) - x;
+      const dy = (node.y || 0) - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestNode = node;
       }
-
-      // Update nodes and links, preventing duplicates
-      setNodes(prevNodes => {
-        const existingIds = new Set(prevNodes.map(n => n.id));
-        const filteredNewNodes = newNodesToAdd.filter(n => !existingIds.has(n.id));
-        return [...prevNodes, ...filteredNewNodes];
-      });
-
-      setLinks(prevLinks => {
-        const linkExists = (source: string, target: string) => 
-          prevLinks.some(l => l.source === source && l.target === target);
-        
-        const filteredNewLinks = newLinksToAdd.filter(
-          l => !linkExists(l.source, l.target)
-        );
-        
-        return [...prevLinks, ...filteredNewLinks];
-      });
-    } else {
-      // Logic for revisiting nodes (can modify text or other state)
-      if (nodeId === 'start') {
-        setCurrentStoryText(`You re-examine the anomaly. The paths remain, but the anomaly itself feels... different now.`);
-      }
-      // Add similar logic for other nodes
+    });
+    
+    // If we found a close node, zoom to it
+    if (closestNode) {
+      setZoomTarget(closestNode.id);
     }
   };
 
@@ -244,35 +266,46 @@ function App() {
     <div className="App">
       <header className="App-header">
         <h1>Interactive Speculative Fiction</h1>
+        <SaveLoadControls className="save-controls" />
       </header>
       <main>
         <NodeMap
-          nodesData={nodes}
-          linksData={links}
+          nodesData={d3Nodes}
+          linksData={d3Links}
           onNodeClick={handleNodeClick}
           width={dimensions.width}
           height={dimensions.height}
+          useForceLayout={d3Nodes.length > 10} // Use force layout for larger graphs
+          highlightedNodeId={state.currentNodeId}
+          zoomToNode={zoomTarget}
         />
-        <div className="story-text-container" style={{ 
-          padding: '20px', 
-          marginTop: '20px', 
-          border: '1px solid #ccc', 
-          maxWidth: '800px', 
-          margin: '20px auto',
-          borderRadius: '8px',
-          background: 'rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-        }}>
+        
+        {showMiniMap && (
+          <MiniMap
+            nodesData={d3Nodes}
+            linksData={d3Links}
+            width={150}
+            height={150}
+            currentNodeId={state.currentNodeId}
+            onMiniMapClick={handleMiniMapClick}
+          />
+        )}
+        
+        <div className="story-text-container">
           <p>{currentStoryText}</p>
-          {storySegments[storyState.currentNodeId]?.choices && (
+          
+          {getCurrentNode()?.choices && (
             <div className="story-choices">
               <p>What would you like to do?</p>
               <div className="choice-buttons">
-                {storySegments[storyState.currentNodeId].choices?.map(choice => (
+                {getCurrentNode()?.choices?.filter(choice => {
+                  // Filter choices based on conditions
+                  return !choice.condition || choice.condition(state);
+                }).map(choice => (
                   <button 
                     key={choice.targetId} 
                     onClick={() => handleNodeClick(choice.targetId, 
-                      nodes.find(n => n.id === choice.targetId) || 
+                      d3Nodes.find(n => n.id === choice.targetId) || 
                       { id: choice.targetId, label: choice.text, visitedCount: 0 }
                     )}
                     className="choice-button"
