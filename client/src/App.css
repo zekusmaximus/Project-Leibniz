@@ -40,3 +40,40 @@
 .read-the-docs {
   color: #888;
 }
+/* Add these styles to App.css */
+
+.story-choices {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.choice-button {
+  padding: 10px 15px;
+  background-color: rgba(100, 108, 255, 0.2);
+  border: 1px solid #646cff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  border-radius: 4px;
+}
+
+.choice-button:hover {
+  background-color: rgba(100, 108, 255, 0.4);
+}
+
+/* For a better mobile experience */
+@media (max-width: 768px) {
+  .story-text-container {
+    width: 90%;
+    margin: 10px auto;
+  }
+}

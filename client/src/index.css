@@ -1,11 +1,12 @@
+/* client/src/index.css - enhanced version */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #101318;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,24 +16,40 @@
 
 a {
   font-weight: 500;
-  color: #646cff;
+  color: #64a5ff;
   text-decoration: inherit;
+  transition: color 0.3s ease;
 }
 a:hover {
-  color: #535bf2;
+  color: #95c7ff;
 }
 
 body {
   margin: 0;
   display: flex;
-  place-items: center;
+  justify-content: center;
   min-width: 320px;
   min-height: 100vh;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(50, 100, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%),
+    radial-gradient(circle at 90% 80%, rgba(100, 50, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%);
+}
+
+#root {
+  width: 100%;
+  max-width: 1280px;
+  padding: 1rem;
 }
 
 h1 {
-  font-size: 3.2em;
+  font-size: 2.5em;
   line-height: 1.1;
+  background: linear-gradient(90deg, #64a5ff, #c093ff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
 button {
@@ -42,27 +59,42 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: #1f2937;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #64a5ff;
+  background-color: #283548;
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.node-map-container {
+  background: rgba(20, 25, 35, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  margin-bottom: 2rem;
 }
+
+.story-text-container {
+  background: rgba(30, 35, 45, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(100, 165, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  padding: 1.5rem;
+  line-height: 1.6;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.story-text-container:hover {
+  border-color: rgba(100, 165, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Optional font import for a more sci-fi feel */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
