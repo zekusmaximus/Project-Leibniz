@@ -1,10 +1,12 @@
 // client/src/App.tsx (updated to include MiniMap and SaveLoadControls)
 import { useState, useEffect } from 'react';
-import { StoryProvider, useStory } from './context/StoryContext';
+import StoryProvider from './context/StoryContext';
+import useStory from './context/StoryContext';
+import { StoryChoice } from './context/StoryTypes';
 import storyLogicService from './services/StoryLogicService';
 import NodeMap from './components/NodeMap';
 import MiniMap from './components/MiniMap';
-import SaveLoadControls from './components/SaveLoadControls';
+import SaveLoadControls from './services/SaveLoadControls';
 import type { NodeData, LinkData } from './components/NodeMap';
 import './App.css';
 
@@ -295,27 +297,32 @@ function StoryContent() {
           <p>{currentStoryText}</p>
           
           {getCurrentNode()?.choices && (
-            <div className="story-choices">
-              <p>What would you like to do?</p>
-              <div className="choice-buttons">
-                {getCurrentNode()?.choices?.filter(choice => {
-                  // Filter choices based on conditions
-                  return !choice.condition || choice.condition(state);
-                }).map(choice => (
-                  <button 
-                    key={choice.targetId} 
-                    onClick={() => handleNodeClick(choice.targetId, 
-                      d3Nodes.find(n => n.id === choice.targetId) || 
-                      { id: choice.targetId, label: choice.text, visitedCount: 0 }
-                    )}
-                    className="choice-button"
-                  >
-                    {choice.text}
-                  </button>
-                ))}
-              </div>
-            </div>
+  <div className="story-choices">
+    <p>What would you like to do?</p>
+    <div className="choice-buttons">
+      {getCurrentNode()?.choices?.filter((choice: StoryChoice) => {
+        // Filter choices based on conditions
+        return !choice.condition || choice.condition(state);
+      }).map((choice: StoryChoice) => (
+        <button 
+          key={choice.targetId} 
+          onClick={() => handleNodeClick(choice.targetId, 
+            d3Nodes.find(n => n.id === choice.targetId) || 
+            { 
+              id: choice.targetId, 
+              label: choice.text, 
+              visitedCount: 0,
+              isRevealed: true // Add this to match the StoryNode interface
+            }
           )}
+          className="choice-button"
+        >
+          {choice.text}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
         </div>
       </main>
     </div>

@@ -1,5 +1,5 @@
 // client/src/context/StoryContext.tsx
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 
 // Define types for our story nodes, links, and state
 export interface StoryNode {

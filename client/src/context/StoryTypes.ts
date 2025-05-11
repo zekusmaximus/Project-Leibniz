@@ -35,7 +35,8 @@ export interface StoryState {
   history: string[];
 }
 
-export interface StoryContextValue {
+// Renamed from StoryContextValue to StoryContextType to be consistent
+export interface StoryContextType {
   state: StoryState;
   visitNode: (nodeId: string) => void;
   revealNode: (nodeId: string, nodeData: Partial<StoryNode>) => void;
@@ -47,3 +48,12 @@ export interface StoryContextValue {
   getVisibleNodes: () => StoryNode[];
   getVisibleLinks: () => StoryLink[];
 }
+
+// Define action types
+export type StoryAction = 
+  | { type: 'VISIT_NODE'; nodeId: string }
+  | { type: 'REVEAL_NODE'; nodeId: string; nodeData: Partial<StoryNode> }
+  | { type: 'REVEAL_LINK'; link: StoryLink }
+  | { type: 'SET_FLAG'; key: string; value: boolean | number | string }
+  | { type: 'RESET_STORY' }
+  | { type: 'LOAD_STORY'; state: StoryState };

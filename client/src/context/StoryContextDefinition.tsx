@@ -1,9 +1,9 @@
 // client/src/context/StoryContextDefinition.tsx
 import React, { createContext } from 'react';
-import { StoryContextValue } from './StoryTypes';
+import { StoryContextType } from './StoryTypes';
 
 // Create the context and export it
-export const StoryContext = createContext<StoryContextValue | undefined>(undefined);
+export const StoryContext = createContext<StoryContextType | undefined>(undefined);
 
 // Create a dummy component to satisfy Fast Refresh requirements
 const ContextDefinitionComponent: React.FC = () => {

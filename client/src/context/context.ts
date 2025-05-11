@@ -1,6 +1,6 @@
 // client/src/context/context.ts
 import { createContext, useContext } from 'react';
-import { StoryContextType } from './StoryContext';
+import { StoryContextType } from './StoryTypes';  // Note: using StoryContextType
 
 // Create context
 export const StoryContext = createContext<StoryContextType | undefined>(undefined);

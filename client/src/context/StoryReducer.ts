@@ -1,18 +1,9 @@
 // client/src/context/storyReducer.ts
-import { StoryNode, StoryLink, StoryState } from './StoryContext';
-import initialState from './InitialState';
-
-// Define action types
-export type ActionType = 
-  | { type: 'VISIT_NODE'; nodeId: string }
-  | { type: 'REVEAL_NODE'; nodeId: string; nodeData: Partial<StoryNode> }
-  | { type: 'REVEAL_LINK'; link: StoryLink }
-  | { type: 'SET_FLAG'; key: string; value: boolean | number | string }
-  | { type: 'RESET_STORY' }
-  | { type: 'LOAD_STORY'; state: StoryState };
+import { StoryNode, StoryLink, StoryState, StoryAction } from './StoryTypes';
+import { InitialState } from './InitialState';
 
 // Create the reducer function
-const storyReducer = (state: StoryState, action: ActionType): StoryState => {
+export const storyReducer = (state: StoryState, action: StoryAction): StoryState => {
   switch (action.type) {
     case 'VISIT_NODE': {
       const nodeId = action.nodeId;
@@ -113,7 +104,7 @@ const storyReducer = (state: StoryState, action: ActionType): StoryState => {
     }
 
     case 'RESET_STORY': {
-      return initialState;
+      return InitialState;
     }
 
     case 'LOAD_STORY': {
@@ -124,5 +115,3 @@ const storyReducer = (state: StoryState, action: ActionType): StoryState => {
       return state;
   }
 };
-
-export default storyReducer;

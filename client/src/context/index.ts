@@ -1,6 +1,6 @@
 // client/src/context/index.ts
 // Re-export types
-export * from './StoryContext';
+export * from './StoryTypes';
 
 // Import from individual files
 import StoryProvider from './StoryProvider';

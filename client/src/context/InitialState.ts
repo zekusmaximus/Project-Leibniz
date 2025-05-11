@@ -1,5 +1,5 @@
-// client/src/context/initialState.ts
-import { StoryNode, StoryLink, StoryState } from './StoryContext';
+// client/src/context/InitialState.ts
+import { StoryNode, StoryLink, StoryState } from './StoryTypes';
 
 // Initial state
 const initialStoryContent: StoryNode[] = [
@@ -85,7 +85,7 @@ initialStoryContent.forEach(node => {
   initialNodes[node.id] = node;
 });
 
-const initialState: StoryState = {
+export const InitialState: StoryState = {
   nodes: initialNodes,
   links: initialStoryLinks,
   currentNodeId: 'start',
@@ -93,5 +93,3 @@ const initialState: StoryState = {
   flags: { storyBegan: false },
   history: []
 };
-
-export default initialState;

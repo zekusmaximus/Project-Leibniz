@@ -5,13 +5,11 @@ import {
   StoryNode, 
   StoryLink, 
   StoryState,
-  StoryContextType
-} from './StoryContext';
-
-// These are imported from StoryContext.tsx but with a direct import
-// to avoid circular dependencies
-import storyReducer from './storyReducer';
-import initialState from './initialState';
+  StoryContextType,  // Note: using StoryContextType, not StoryContextValue
+  StoryAction
+} from './StoryTypes';
+import { storyReducer } from './StoryReducer';
+import { InitialState } from './InitialState';
 
 // Create context provider
 const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
