@@ -457,9 +457,18 @@ const NodeMap: React.FC<NodeMapProps> = ({
   }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode]);
 
   return (
-    <div className="node-map-container" style={{ textAlign: 'center' }}>
-      <svg ref={svgRef}></svg>
-    </div>
+     <div className="node-map-container" style={{ 
+    width: '100%', 
+    height: `${height}px`, 
+    minHeight: '400px', // Ensure minimum height
+    margin: '0 auto',
+    overflow: 'hidden',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '8px',
+    background: 'rgba(20, 25, 35, 0.5)'
+  }}>
+    <svg ref={svgRef} width={width} height={height}></svg>
+  </div>
   );
 };
 

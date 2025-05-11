@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import StoryProvider from './context/StoryProvider';
 import { useStory } from './context/context';
-import { StoryChoice } from './context/StoryTypes';
 import storyLogicService from './services/StoryLogicService';
 import NodeMap from './components/NodeMap';
 import MiniMap from './components/MiniMap';
@@ -50,14 +49,16 @@ function StoryContent() {
   useEffect(() => {
     const handleResize = () => {
       setDimensions({
-        width: window.innerWidth * 0.9,
-        height: window.innerHeight * 0.6,
+        width: Math.min(window.innerWidth * 0.9, 1200), // Set a max width
+        height: Math.min(window.innerHeight * 0.6, 600), // Set a max height
       });
     };
 
     window.addEventListener('resize', handleResize);
+    handleResize(); // Call it initially
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
 
   // Update D3 nodes and links when story state changes
   useEffect(() => {
@@ -265,13 +266,14 @@ function StoryContent() {
     }
   };
 
-  return (
+ return (
     <div className="App">
       <header className="App-header">
         <h1>Interactive Speculative Fiction</h1>
         <SaveLoadControls className="save-controls" />
       </header>
-      <main>
+      <main style={{ position: 'relative', overflow: 'visible' }}>
+        {/* Fixed NodeMap size */}
         <NodeMap
           nodesData={d3Nodes}
           linksData={d3Links}
@@ -282,6 +284,7 @@ function StoryContent() {
           zoomToNode={zoomTarget}
         />
         
+        {/* Only show MiniMap when needed and position it absolutely */}
         {showMiniMap && (
           <MiniMap
             nodesData={d3Nodes}
@@ -293,35 +296,39 @@ function StoryContent() {
           />
         )}
         
-        <div className="story-text-container">
+        {/* Make sure the story text container has a defined height and scrolling */}
+        <div className="story-text-container" style={{ 
+          marginTop: '20px', 
+          maxHeight: '300px', 
+          overflowY: 'auto',
+          padding: '20px',
+          borderRadius: '8px'
+        }}>
           <p>{currentStoryText}</p>
           
           {getCurrentNode()?.choices && (
-  <div className="story-choices">
-    <p>What would you like to do?</p>
-    <div className="choice-buttons">
-      {getCurrentNode()?.choices?.filter((choice: StoryChoice) => {
-        // Filter choices based on conditions
-        return !choice.condition || choice.condition(state);
-      }).map((choice: StoryChoice) => (
-        <button 
-          key={choice.targetId} 
-          onClick={() => handleNodeClick(choice.targetId, 
-            d3Nodes.find(n => n.id === choice.targetId) || 
-            { 
-              id: choice.targetId, 
-              label: choice.text, 
-              visitedCount: 0
-            }
+            <div className="story-choices">
+              <p>What would you like to do?</p>
+              <div className="choice-buttons">
+                {getCurrentNode()?.choices
+                  ?.filter((choice) => !choice.condition || choice.condition(state))
+                  .map((choice) => (
+                    <button 
+                      key={choice.targetId} 
+                      onClick={() => handleNodeClick(
+                        choice.targetId, 
+                        d3Nodes.find(n => n.id === choice.targetId) || 
+                        { id: choice.targetId, label: choice.text, visitedCount: 0 }
+                      )}
+                      className="choice-button"
+                    >
+                      {choice.text}
+                    </button>
+                  ))
+                }
+              </div>
+            </div>
           )}
-          className="choice-button"
-        >
-          {choice.text}
-        </button>
-      ))}
-    </div>
-  </div>
-)}
         </div>
       </main>
     </div>
