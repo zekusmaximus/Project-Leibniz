@@ -1,5 +1,5 @@
 // client/src/App.tsx (updated to include MiniMap and SaveLoadControls)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import StoryProvider from './context/StoryProvider';
 import { useStory } from './context/context';
 import storyLogicService from './services/StoryLogicService';
@@ -39,26 +39,25 @@ function StoryContent() {
   const [showMiniMap, setShowMiniMap] = useState<boolean>(false);
   const [zoomTarget, setZoomTarget] = useState<string | undefined>(undefined);
 
-  // Responsive sizing
-  const [dimensions, setDimensions] = useState({
-    width: window.innerWidth * 0.9,
-    height: window.innerHeight * 0.6,
-  });
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Handle window resize
+  // Responsive sizing based on container, not window
+  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+
   useEffect(() => {
-    const handleResize = () => {
-      setDimensions({
-        width: Math.min(window.innerWidth * 0.9, 1200), // Set a max width
-        height: Math.min(window.innerHeight * 0.6, 600), // Set a max height
-      });
-    };
-
-    window.addEventListener('resize', handleResize);
-    handleResize(); // Call it initially
-    return () => window.removeEventListener('resize', handleResize);
+    function updateSize() {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({
+          width: Math.min(rect.width, 1200),
+          height: Math.min(rect.height, 600),
+        });
+      }
+    }
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
   }, []);
-
 
   // Update D3 nodes and links when story state changes
   useEffect(() => {
@@ -267,68 +266,75 @@ function StoryContent() {
   };
 
  return (
-    <div className="App">
+    <div className="App" ref={containerRef} style={{height: '100vh', width: '100vw', overflow: 'hidden'}}>
       <header className="App-header">
         <h1>Interactive Speculative Fiction</h1>
         <SaveLoadControls className="save-controls" />
       </header>
-      <main style={{ position: 'relative', overflow: 'visible' }}>
-        {/* Fixed NodeMap size */}
-        <NodeMap
-          nodesData={d3Nodes}
-          linksData={d3Links}
-          onNodeClick={handleNodeClick}
-          width={dimensions.width}
-          height={dimensions.height}
-          highlightedNodeId={state.currentNodeId}
-          zoomToNode={zoomTarget}
-        />
-        
-        {/* Only show MiniMap when needed and position it absolutely */}
-        {showMiniMap && (
-          <MiniMap
-            nodesData={d3Nodes}
-            linksData={d3Links}
-            width={150}
-            height={150}
-            currentNodeId={state.currentNodeId}
-            onMiniMapClick={handleMiniMapClick}
-          />
-        )}
-        
-        {/* Make sure the story text container has a defined height and scrolling */}
-        <div className="story-text-container" style={{ 
-          marginTop: '20px', 
-          maxHeight: '300px', 
-          overflowY: 'auto',
-          padding: '20px',
-          borderRadius: '8px'
-        }}>
-          <p>{currentStoryText}</p>
-          
-          {getCurrentNode()?.choices && (
-            <div className="story-choices">
-              <p>What would you like to do?</p>
-              <div className="choice-buttons">
-                {getCurrentNode()?.choices
-                  ?.filter((choice) => !choice.condition || choice.condition(state))
-                  .map((choice) => (
-                    <button 
-                      key={choice.targetId} 
-                      onClick={() => handleNodeClick(
-                        choice.targetId, 
-                        d3Nodes.find(n => n.id === choice.targetId) || 
-                        { id: choice.targetId, label: choice.text, visitedCount: 0 }
-                      )}
-                      className="choice-button"
-                    >
-                      {choice.text}
-                    </button>
-                  ))
-                }
-              </div>
-            </div>
+      <main style={{ 
+        position: 'relative', 
+        display: 'flex', 
+        flexDirection: 'row', 
+        height: `calc(100vh - 120px)`, // Adjust header height as needed
+        overflow: 'hidden'
+      }}>
+        <div style={{flex: 2, minWidth: 0, height: '100%'}}>
+          {(dimensions.width > 0 && dimensions.height > 0) && (
+            <NodeMap
+              nodesData={d3Nodes}
+              linksData={d3Links}
+              onNodeClick={handleNodeClick}
+              width={dimensions.width * 0.7}
+              height={dimensions.height}
+              highlightedNodeId={state.currentNodeId}
+              zoomToNode={zoomTarget}
+            />
           )}
+        </div>
+        <div style={{flex: 1, minWidth: 300, maxWidth: 400, display: 'flex', flexDirection: 'column', height: '100%'}}>
+          {showMiniMap && (
+            <MiniMap
+              nodesData={d3Nodes}
+              linksData={d3Links}
+              width={150}
+              height={150}
+              currentNodeId={state.currentNodeId}
+              onMiniMapClick={handleMiniMapClick}
+            />
+          )}
+          <div className="story-text-container" style={{ 
+            marginTop: '20px', 
+            maxHeight: 'calc(100% - 170px)', 
+            overflowY: 'auto',
+            padding: '20px',
+            borderRadius: '8px'
+          }}>
+            <p>{currentStoryText}</p>
+            
+            {getCurrentNode()?.choices && (
+              <div className="story-choices">
+                <p>What would you like to do?</p>
+                <div className="choice-buttons">
+                  {getCurrentNode()?.choices
+                    ?.filter((choice) => !choice.condition || choice.condition(state))
+                    .map((choice) => (
+                      <button 
+                        key={choice.targetId} 
+                        onClick={() => handleNodeClick(
+                          choice.targetId, 
+                          d3Nodes.find(n => n.id === choice.targetId) || 
+                          { id: choice.targetId, label: choice.text, visitedCount: 0 }
+                        )}
+                        className="choice-button"
+                      >
+                        {choice.text}
+                      </button>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
