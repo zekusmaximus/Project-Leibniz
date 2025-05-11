@@ -270,8 +270,44 @@ export interface StoryContextType {
 
 // This is a component that only exists to satisfy Fast Refresh
 // It's the default export and just renders its children
+const StoryContext = React.createContext<StoryContextType | undefined>(undefined);
+
 const StoryContextRoot: React.FC<{ children: ReactNode }> = ({ children }) => {
-  return <>{children}</>;
+  const [state, dispatch] = React.useReducer(storyReducer, initialState);
+
+  const visitNode = (nodeId: string) => dispatch({ type: 'VISIT_NODE', nodeId });
+  const revealNode = (nodeId: string, nodeData: Partial<StoryNode>) =>
+    dispatch({ type: 'REVEAL_NODE', nodeId, nodeData });
+  const revealLink = (link: StoryLink) => dispatch({ type: 'REVEAL_LINK', link });
+  const setFlag = (key: string, value: boolean | number | string) =>
+    dispatch({ type: 'SET_FLAG', key, value });
+  const resetStory = () => dispatch({ type: 'RESET_STORY' });
+  const loadStory = (state: StoryState) => dispatch({ type: 'LOAD_STORY', state });
+
+  const getCurrentNode = () => state.nodes[state.currentNodeId];
+  const getVisibleNodes = () =>
+    Object.values(state.nodes).filter((node) => node.isRevealed);
+  const getVisibleLinks = () =>
+    state.links.filter((link) => link.isRevealed);
+
+  const contextValue: StoryContextType = {
+    state,
+    visitNode,
+    revealNode,
+    revealLink,
+    setFlag,
+    resetStory,
+    loadStory,
+    getCurrentNode,
+    getVisibleNodes,
+    getVisibleLinks,
+  };
+
+  return (
+    <StoryContext.Provider value={contextValue}>
+      {children}
+    </StoryContext.Provider>
+  );
 };
 
 // Export this component as the default export

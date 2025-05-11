@@ -6,14 +6,13 @@ import {
   StoryLink, 
   StoryState,
   StoryContextType,  // Note: using StoryContextType, not StoryContextValue
-  StoryAction
 } from './StoryTypes';
 import { storyReducer } from './StoryReducer';
 import { InitialState } from './InitialState';
 
 // Create context provider
 const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(storyReducer, initialState);
+  const [state, dispatch] = useReducer(storyReducer, InitialState);
 
   const visitNode = (nodeId: string) => {
     dispatch({ type: 'VISIT_NODE', nodeId });

@@ -1,5 +1,5 @@
 // client/src/services/StoryLogicService.ts
-import { StoryState, StoryNode, StoryLink } from '../context/StoryContext';
+import { StoryState } from '../context/StoryTypes';
 
 type StoryTrigger = (state: StoryState) => boolean;
 type StoryEffect = (state: StoryState) => Partial<StoryState>;
@@ -22,7 +22,7 @@ class StoryLogicService {
 
   private initializeRules() {
     // Rule: When starting node is visited, reveal paths A and B
-    this.addRule({
+    this.addRule({ ...{
       id: 'reveal_initial_paths',
       trigger: (state) => state.visitCounts['start'] === 1,
       effect: () => ({
@@ -31,7 +31,7 @@ class StoryLogicService {
       }),
       priority: 100,
       once: true,
-      executed: false
+      executed: false }
     });
 
     // Rule: When path A is visited, reveal the whisper source
@@ -94,8 +94,8 @@ class StoryLogicService {
     });
   }
 
-  addRule(rule: Omit<StoryRule, 'executed'>) {
-    this.rules.push({ ...rule, executed: false });
+  addRule(rule: StoryRule) {
+    this.rules.push(rule);
   }
 
   evaluateState(state: StoryState): Partial<StoryState> {
@@ -148,4 +148,4 @@ class StoryLogicService {
 }
 
 export const storyLogicService = new StoryLogicService();
-export default storyLogicService; 
+export default storyLogicService;

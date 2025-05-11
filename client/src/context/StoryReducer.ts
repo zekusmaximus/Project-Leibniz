@@ -1,8 +1,7 @@
-// client/src/context/storyReducer.ts
-import { StoryNode, StoryLink, StoryState, StoryAction } from './StoryTypes';
+// client/src/context/StoryReducer.ts
+import {  StoryState, StoryAction } from './StoryTypes';
 import { InitialState } from './InitialState';
 
-// Create the reducer function
 export const storyReducer = (state: StoryState, action: StoryAction): StoryState => {
   switch (action.type) {
     case 'VISIT_NODE': {

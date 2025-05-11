@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 export class ApiService {
   async fetchAllNodes(): Promise<StoryNode[]> {
     try {
-      const response = await axios.get(`${API_URL}/nodes`);
+      const response = await axios.get<StoryNode[]>(`${API_URL}/nodes`);
       return response.data;
     } catch (error) {
       console.error('Error fetching nodes:', error);
@@ -17,8 +17,8 @@ export class ApiService {
   
   async fetchAllLinks(): Promise<StoryLink[]> {
     try {
-      const response = await axios.get(`${API_URL}/links`);
-      return response.data;
+      const response = await axios.get<StoryLink[]>(`${API_URL}/links`);
+      return response.data
     } catch (error) {
       console.error('Error fetching links:', error);
       throw error;
@@ -27,7 +27,7 @@ export class ApiService {
   
   async fetchNode(nodeId: string): Promise<StoryNode> {
     try {
-      const response = await axios.get(`${API_URL}/nodes/${nodeId}`);
+      const response = await axios.get<StoryNode>(`${API_URL}/nodes/${nodeId}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching node ${nodeId}:`, error);
@@ -37,7 +37,7 @@ export class ApiService {
   
   async fetchLinksFromSource(sourceId: string): Promise<StoryLink[]> {
     try {
-      const response = await axios.get(`${API_URL}/links/source/${sourceId}`);
+      const response = await axios.get<StoryLink[]>(`${API_URL}/links/source/${sourceId}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching links from source ${sourceId}:`, error);
@@ -47,7 +47,7 @@ export class ApiService {
   
   async saveUserProgress(userId: string | null, storyState: StoryState): Promise<{ userId: string }> {
     try {
-      const response = await axios.post(`${API_URL}/progress`, {
+      const response = await axios.post<{ userId: string }>(`${API_URL}/progress`, {
         userId,
         storyState
       });
@@ -60,7 +60,7 @@ export class ApiService {
   
   async loadUserProgress(userId: string): Promise<StoryState> {
     try {
-      const response = await axios.get(`${API_URL}/progress/${userId}`);
+      const response = await axios.get<{ storyState: StoryState }>(`${API_URL}/progress/${userId}`);
       return response.data.storyState;
     } catch (error) {
       console.error(`Error loading user progress for ${userId}:`, error);

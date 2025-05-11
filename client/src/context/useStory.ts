@@ -1,7 +1,6 @@
 // client/src/context/useStory.tsx
 import React from 'react';
 import { useContext } from 'react';
-import { StoryContextType } from './StoryTypes';
 
 // Import the Context from a separate file since this file can't be the one to define it
 import { StoryContext } from './StoryContextDefinition';

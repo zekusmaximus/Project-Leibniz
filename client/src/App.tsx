@@ -1,12 +1,13 @@
 // client/src/App.tsx (updated to include MiniMap and SaveLoadControls)
 import { useState, useEffect } from 'react';
-import StoryProvider from './context/StoryContext';
-import useStory from './context/StoryContext';
+import StoryProvider from './context/StoryProvider';
+import { useStory } from './context/context';
 import { StoryChoice } from './context/StoryTypes';
 import storyLogicService from './services/StoryLogicService';
 import NodeMap from './components/NodeMap';
 import MiniMap from './components/MiniMap';
-import SaveLoadControls from './services/SaveLoadControls';
+// Changed from SaveLoadControls in services to components
+import SaveLoadControls from './services/SaveLoadControls'; 
 import type { NodeData, LinkData } from './components/NodeMap';
 import './App.css';
 
@@ -108,7 +109,7 @@ function StoryContent() {
   }, [state, dimensions.width, dimensions.height]);
 
  // Helper function to handle special flags that affect the graph
-  const handleSpecialFlag = (key: string, value: any) => {
+  const handleSpecialFlag = (key: string, value: boolean | string | number | null) => {
     switch(key) {
       case 'initialPathsRevealed':
         if (value === true) {
@@ -277,7 +278,6 @@ function StoryContent() {
           onNodeClick={handleNodeClick}
           width={dimensions.width}
           height={dimensions.height}
-          useForceLayout={d3Nodes.length > 10} // Use force layout for larger graphs
           highlightedNodeId={state.currentNodeId}
           zoomToNode={zoomTarget}
         />
@@ -311,8 +311,7 @@ function StoryContent() {
             { 
               id: choice.targetId, 
               label: choice.text, 
-              visitedCount: 0,
-              isRevealed: true // Add this to match the StoryNode interface
+              visitedCount: 0
             }
           )}
           className="choice-button"
