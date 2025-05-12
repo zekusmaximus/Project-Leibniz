@@ -1,13 +1,12 @@
-// client/src/components/NodeMap.tsx
+// src/components/NodeMap.tsx
 import React, { useEffect, useRef } from 'react';
-import { select, pointer, type Selection } from 'd3-selection';
+import { select, type Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior, type D3ZoomEvent } from 'd3-zoom';
 import { drag, type DragBehavior, type D3DragEvent } from 'd3-drag';
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type Simulation, type SimulationLinkDatum, type ForceLink } from 'd3-force';
-import 'd3-transition'; // Import for side effects (augmenting D3 Selections with .transition())
-import { type Transition } from 'd3-transition'; // Explicitly import Transition type
+import 'd3-transition';
+import { type Transition } from 'd3-transition';
 import { easeBounce } from 'd3-ease';
-
 
 export interface NodeData {
   iconUrl?: string;
@@ -32,8 +31,6 @@ export interface LinkData {
   width?: number;
 }
 
-// Extends D3's SimulationLinkDatum to include custom properties like color and width
-// and ensures source and target are resolved NodeData objects (post-simulation processing)
 interface CustomSimulationLink extends SimulationLinkDatum<NodeData> {
   color?: string;
   width?: number;
@@ -47,6 +44,7 @@ interface NodeMapProps {
   height?: number;
   highlightedNodeId?: string;
   zoomToNode?: string;
+  enableZoomAnimation?: boolean; // Added this prop
 }
 
 type D3NodeSelection = Selection<SVGGElement, NodeData, SVGGElement, unknown>;
@@ -60,10 +58,14 @@ const NodeMap: React.FC<NodeMapProps> = ({
   height = 600,
   highlightedNodeId,
   zoomToNode,
+  enableZoomAnimation = false, // Added default value
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<Simulation<NodeData, CustomSimulationLink> | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  // Refs to store selections for later use in animations
+  const nodeElementsRef = useRef<D3NodeSelection | null>(null);
+  const linkElementsRef = useRef<D3LinkSelection | null>(null);
 
   useEffect(() => {
     if (!svgRef.current || !nodesData.length) return;
@@ -71,58 +73,19 @@ const NodeMap: React.FC<NodeMapProps> = ({
     const svgSelection = select(svgRef.current);
     svgSelection.selectAll('*').remove();
 
-    svgSelection.attr('width', '100%') // Make SVG fill its container
-      .attr('height', '100%') // Make SVG fill its container
-      .style('border', '1px solid rgba(255, 255, 255, 0.1)') // This border might be on the SVG itself
+    svgSelection.attr('width', '100%')
+      .attr('height', '100%')
+      .style('border', '1px solid rgba(255, 255, 255, 0.1)')
       .style('border-radius', '8px')
-      .style('background', 'transparent'); // Inherit background from parent or set as needed
+      .style('background', 'transparent');
 
     const g = svgSelection.append('g').attr('class', 'main-group') as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
-
-    // Minimap view - REMOVED FROM NODEMAP COMPONENT
-    // const minimapWidth = 160;
-    // const minimapHeight = 120;
-    // const minimapScale = 0.2;
-    // const minimap = (svgSelection.append('g')
-    //   .attr('class', 'minimap')
-    //   .attr('transform', `translate(${width - minimapWidth - 10}, 10)`)
-    //   .style('pointer-events', 'none')) as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
-
-    // minimap.append('rect')
-    //   .attr('width', minimapWidth)
-    //   .attr('height', minimapHeight)
-    //   .attr('fill', 'rgba(0,0,0,0.2)')
-    //   .attr('stroke', '#888');
-
-    // minimap.append('g').attr('transform', `scale(${minimapScale})`); // minimapContent was not read
-    // minimap.append('rect')                                         // minimapView was not read
-    //   .attr('class', 'minimap-view')
-    //   .attr('fill', 'none')
-    //   .attr('stroke', '#ffcc00')
-    //   .attr('stroke-width', 1);
-
-    // minimap
-    //   .style('pointer-events', 'all')
-    //   .on('click', function (this: SVGGElement, event: MouseEvent) { // Explicitly type 'this'
-    //     const [mx, my] = pointer(event, this);
-    //     const scale = 1 / minimapScale;
-    //     const tx = -mx * scale + width / 2;
-    //     const ty = -my * scale + height / 2;
-    //     if (zoomRef.current) {
-    //       // Correct way to apply a programmatic zoom transform
-    //       zoomRef.current.transform(
-    //         svgSelection.transition().duration(500) as Transition<SVGSVGElement, unknown, null, undefined>,
-    //         zoomIdentity.translate(tx, ty).scale(1)
-    //       );
-    //     }
-    //   });
 
     // Define zoom behavior
     const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 3])
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
-        g.attr('transform', event.transform.toString()); // Apply transform as string
-        // Minimap view update would go here if implemented
+        g.attr('transform', event.transform.toString());
       });
     zoomRef.current = zoomBehaviorInstance;
     svgSelection.call(zoomBehaviorInstance);
@@ -155,27 +118,27 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     const nodeMap = new Map(nodesData.map(node => [node.id, node]));
 
+    // Declare nodeElements and linkElements here before use
     let nodeElements: D3NodeSelection;
     let linkElements: D3LinkSelection;
 
-    // Prepare links for the simulation, ensuring source/target are IDs and nodes exist
+    // Prepare links for the simulation
     const linksForSimulation: LinkData[] = linksData
       .map(link => ({
-        ...link, // Preserve custom properties like color, width
+        ...link,
         source: typeof link.source === 'string' ? link.source : link.source.id,
         target: typeof link.target === 'string' ? link.target : link.target.id,
       }))
       .filter(link => nodeMap.has(link.source as string) && nodeMap.has(link.target as string));
 
     const linksGroup = g.append('g').attr('class', 'links');
-    // Create gradients for links based on the original LinkData (or resolved node colors)
+    // Create gradients for links
     linksForSimulation.forEach((link, i) => {
       const gradientId = `link-gradient-${i}`;
       const gradient = defs.append("linearGradient")
         .attr("id", gradientId)
         .attr("gradientUnits", "userSpaceOnUse");
 
-      // Resolve source and target nodes to get their colors
       const sourceNode = nodeMap.get(link.source as string);
       const targetNode = nodeMap.get(link.target as string);
 
@@ -187,7 +150,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
     });
 
     linkElements = linksGroup.selectAll('line')
-      .data(linksForSimulation as unknown as CustomSimulationLink[]) // Cast for D3 data binding, simulation will populate source/target objects
+      .data(linksForSimulation as unknown as CustomSimulationLink[])
       .enter()
       .append('line')
       .style('stroke', (_: CustomSimulationLink, i: number) => `url(#link-gradient-${i})`)
@@ -195,6 +158,9 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .style('stroke-width', (d: CustomSimulationLink) => d.width || 2)
       .style('stroke-dasharray', '5,5')
       .style('stroke-dashoffset', 10);
+
+    // Store linkElements in ref for later use
+    linkElementsRef.current = linkElements;
 
     // Animate stroke-dashoffset separately
     linkElements.transition()
@@ -233,7 +199,9 @@ const NodeMap: React.FC<NodeMapProps> = ({
         if (onNodeClick) onNodeClick(d.id, d);
       });
 
-    // Glow layer
+    // Store nodeElements in ref for later use
+    nodeElementsRef.current = nodeElements;
+
     // Optional icon for each node
     nodeElements
       .filter((d: NodeData) => !!d.iconUrl)
@@ -262,7 +230,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     // Main circle layer with animation
     nodeElements.append('circle')
-      .attr('class', 'node-main-circle') // Added class for specific selection
+      .attr('class', 'node-main-circle')
       .attr('r', 0)
       .style('fill', (d: NodeData) => {
         let baseColor = d.color || 'steelblue';
@@ -281,8 +249,8 @@ const NodeMap: React.FC<NodeMapProps> = ({
     if (highlightedNodeId) {
       nodeElements
       .filter((d: NodeData) => d.id === highlightedNodeId)
-      .select<SVGCircleElement>('.node-main-circle') // Ensure selection is of SVGCircleElement
-      .call((selection: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => { // Corrected type
+      .select<SVGCircleElement>('.node-main-circle')
+      .call((selection: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
         const pulse = (sel: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
           sel
             .transition()
@@ -291,7 +259,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
             .transition()
             .duration(1000)
             .attr('r', (d: NodeData) => d.size || 15)
-            .on('end', () => pulse(sel)); // Pass selection to maintain context
+            .on('end', () => pulse(sel));
         };
         pulse(selection);
       });
@@ -314,11 +282,37 @@ const NodeMap: React.FC<NodeMapProps> = ({
       if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined && zoomRef.current) {
         const tx = width / 2 - targetNode.x;
         const ty = height / 2 - targetNode.y;
-        // Correct way to apply a programmatic zoom transform
         zoomRef.current.transform(
           svgSelection.transition().duration(750) as Transition<SVGSVGElement, unknown, null, undefined>,
           zoomIdentity.translate(tx, ty).scale(1.2)
         );
+      }
+    }
+
+    // Add animation for the transition when enableZoomAnimation is true
+    if (zoomToNode && enableZoomAnimation && nodeElementsRef.current && linkElementsRef.current) {
+      const targetNode = nodesData.find(node => node.id === zoomToNode);
+      if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined) {
+        const node = nodeElementsRef.current
+          .filter((d: NodeData) => d.id === zoomToNode)
+          .select('.node-main-circle');
+          
+        node.transition()
+          .duration(800)
+          .attr('r', Math.min(width, height) / 2);
+          
+        // Fade out other nodes
+        nodeElementsRef.current
+          .filter((d: NodeData) => d.id !== zoomToNode)
+          .transition()
+          .duration(400)
+          .style('opacity', 0);
+          
+        // Fade out links
+        linkElementsRef.current
+          .transition()
+          .duration(400)
+          .style('opacity', 0);
       }
     }
 
@@ -346,7 +340,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
       nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
     });
 
-    // Tooltip (create once, then show/hide and update content)
+    // Tooltip
     const tooltip = g.append('g')
       .attr('class', 'tooltip')
       .style('opacity', 0)
@@ -370,7 +364,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     // Add visit indicators
     nodeElements
-      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0)) // Ensure boolean return
+      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
       .append('circle')
       .attr('class', 'visit-indicator')
       .attr('r', 5)
@@ -381,7 +375,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .style('stroke-width', 1);
 
     nodeElements
-      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0)) // Ensure boolean return
+      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
       .append('text')
       .attr('class', 'visit-count')
       .attr('x', (d: NodeData) => (d.size || 15) * 0.6)
@@ -390,12 +384,12 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .style('font-size', '8px')
       .style('fill', '#000')
       .style('pointer-events', 'none')
-      .text((d: NodeData) => d.visitedCount?.toString() ?? ''); // Ensure string return, handle undefined
+      .text((d: NodeData) => d.visitedCount?.toString() ?? '');
 
     // Add hover tooltips
     nodeElements
       .on('mouseenter', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
-        const currentSelection = select<SVGGElement, NodeData>(this); // Let TypeScript infer or use correct inferred type
+        const currentSelection = select<SVGGElement, NodeData>(this);
         currentSelection.select<SVGCircleElement>('circle:not(.visit-indicator)')
           .transition()
           .duration(300)
@@ -429,7 +423,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
           .style('opacity', 1);
       })
       .on('mouseleave', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
-        const currentSelection = select<SVGGElement, NodeData>(this); // Let TypeScript infer or use correct inferred type
+        const currentSelection = select<SVGGElement, NodeData>(this);
         currentSelection.select<SVGCircleElement>('circle:not(.visit-indicator)')
           .transition()
           .duration(500)
@@ -454,21 +448,16 @@ const NodeMap: React.FC<NodeMapProps> = ({
         simulationRef.current = null;
       }
     };
-  }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode]);
+  }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation]);
 
   return (
-     <div className="node-map-container" style={{ 
-    width: '100%', 
-    height: '100%', // Ensure div takes full height of its flex parent in App.tsx
-    // minHeight: '400px', // Let flexbox determine height
-    margin: '0 auto', // This might still cause centering issues if parent is not handling alignment
-    overflow: 'hidden',
-    // border: '1px solid rgba(255, 255, 255, 0.1)', // Border is now on SVG or parent panel
-    // borderRadius: '8px', // borderRadius is on parent panel in App.tsx
-    // background: 'rgba(20, 25, 35, 0.5)' // Background is on parent panel in App.tsx or SVG
-  }}>
-    <svg ref={svgRef} /* width and height are now 100% set in useEffect */ ></svg>
-  </div>
+    <div className="node-map-container" style={{ 
+      width: '100%', 
+      height: '100%',
+      overflow: 'hidden',
+    }}>
+      <svg ref={svgRef}></svg>
+    </div>
   );
 };
 
