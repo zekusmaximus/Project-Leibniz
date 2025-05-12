@@ -137,3 +137,29 @@ main {
   justify-content: center;
   margin-bottom: 20px;
 }
+
+.LeibnizProjectRootContainer {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.home-page, .narrative-page {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.title {
+  font-size: 2.5rem;
+  line-height: 1.1;
+  background: linear-gradient(90deg, #64a5ff, #c093ff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-top: 20px;
+  margin-bottom: 30px;
+}

@@ -60,6 +60,28 @@ const NodeMap: React.FC<NodeMapProps> = ({
   zoomToNode,
   enableZoomAnimation = false, // Added default value
 }) => {
+  // Add this console log to debug input data
+  console.log('NodeMap received:', {
+    nodesLength: nodesData.length,
+    linksLength: linksData.length,
+    width,
+    height
+  });
+
+  // Ensure each node has valid data
+  const validNodesData = nodesData.map(node => ({
+    ...node,
+    id: node.id,
+    x: node.x ?? Math.random() * width * 0.8 + width * 0.1,
+    y: node.y ?? Math.random() * height * 0.8 + height * 0.1,
+    size: node.size ?? 25,
+    color: node.color ?? 'steelblue',
+    visitedCount: node.visitedCount ?? 0
+  }));
+  
+  // Log the valid data
+  console.log('Processed nodes:', validNodesData.length);
+  
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<Simulation<NodeData, CustomSimulationLink> | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -70,25 +92,97 @@ const NodeMap: React.FC<NodeMapProps> = ({
   useEffect(() => {
     if (!svgRef.current || !nodesData.length) return;
 
-    const svgSelection = select(svgRef.current);
-    svgSelection.selectAll('*').remove();
+// Make sure we have valid data to render
+  if (nodesData.length === 0) {
+    console.log('No nodes to display');
+    return;
+  }
+  
+  console.log(`Rendering ${nodesData.length} nodes and ${linksData.length} links`);
 
-    svgSelection.attr('width', '100%')
-      .attr('height', '100%')
-      .style('border', '1px solid rgba(255, 255, 255, 0.1)')
-      .style('border-radius', '8px')
-      .style('background', 'transparent');
+    // Clear previous SVG content and refs
+  const svgSelection = select(svgRef.current);
+  svgSelection.selectAll('*').remove();
+  nodeElementsRef.current = null;
+  linkElementsRef.current = null;
 
-    const g = svgSelection.append('g').attr('class', 'main-group') as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
+  // Set full size
+ svgSelection.attr('width', width)
+  .attr('height', height)
+  .style('display', 'block') // Ensure it's a block element
+  .style('margin', '0 auto') // Center it horizontally
+  .style('overflow', 'hidden'); // Hide anything outside bounds
 
-    // Define zoom behavior
-    const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 3])
-      .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
-        g.attr('transform', event.transform.toString());
-      });
-    zoomRef.current = zoomBehaviorInstance;
-    svgSelection.call(zoomBehaviorInstance);
+  // Create main group for all elements
+  const g = svgSelection.append('g').attr('class', 'main-group');
+  const initialScale = 1.2; // Slightly zoomed in by default
+  const initialTransform = zoomIdentity
+    .translate(width / 2, height / 2)
+    .scale(initialScale);
+  g.attr('transform', initialTransform.toString());
+
+   // Create map of nodeId to node for faster lookup
+  const nodeMap = new Map<string, NodeData>();
+  nodesData.forEach((node, i) => {
+  // Get the node size (or default)
+  const nodeSize = node.size || 25;
+  
+  if (node.x === undefined || node.y === undefined) {
+    // Position nodes in a circle formation centered in the visible area
+    const angle = (i * (2 * Math.PI)) / nodesData.length;
+    const radius = Math.min(width, height) * 0.3;
+    
+    // Center at width/2, height/2 to place in middle of container
+    node.x = (width / 2) + Math.cos(angle) * radius;
+    node.y = (height / 2) + Math.sin(angle) * radius;
+  }
+  
+  // Regardless of how position was set, constrain within visible area
+  // Make sure nodes stay at least nodeSize distance from the edges
+  node.x = Math.max(nodeSize, Math.min(width - nodeSize, node.x || width/2));
+  node.y = Math.max(nodeSize, Math.min(height - nodeSize, node.y || height/2));
+});
+  
+  // Process links, ensuring they reference valid nodes
+  const processedLinks = linksData
+    .filter(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+      return nodeMap.has(sourceId) && nodeMap.has(targetId);
+    })
+    .map(link => ({
+      ...link,
+      source: typeof link.source === 'string' ? link.source : link.source.id,
+      target: typeof link.target === 'string' ? link.target : link.target.id
+    }));
+  
+  console.log(`Valid links after processing: ${processedLinks.length}`);
+  
+
+  // Define zoom behavior
+  const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.5, 2])
+    .translateExtent([[0, 0], [width, height]]) // Constrain panning to container size
+    .extent([[0, 0], [width, height]])
+    .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
+      g.attr('transform', event.transform.toString());
+    });
+  zoomRef.current = zoomBehaviorInstance;
+  svgSelection.call(zoomBehaviorInstance);
+  
+  // Apply initial transform to the zoom behavior
+  zoomBehaviorInstance.transform(svgSelection, initialTransform);
+  
+  // Make sure each node has a position if x,y are not defined
+  nodesData.forEach((node, i) => {
+    if (node.x === undefined) {
+      // Position nodes in a circle if no position is defined
+      const angle = (i * (2 * Math.PI)) / nodesData.length;
+      const radius = Math.min(width, height) * 0.3;
+      node.x = Math.cos(angle) * radius;
+      node.y = Math.sin(angle) * radius;
+    }
+  });
 
     const defs = svgSelection.append("defs");
 
@@ -116,11 +210,20 @@ const NodeMap: React.FC<NodeMapProps> = ({
       feMerge.append("feMergeNode").attr("in", "SourceGraphic");
     });
 
-    const nodeMap = new Map(nodesData.map(node => [node.id, node]));
-
     // Declare nodeElements and linkElements here before use
     let nodeElements: D3NodeSelection;
     let linkElements: D3LinkSelection;
+
+// In NodeMap.tsx - Helper function to calculate appropriate node size based on container dimensions
+const calculateNodeSize = () => {
+  // Scale node size based on container size
+  const minDimension = Math.min(width, height);
+  const baseSize = minDimension / 15; // Size relative to container
+  return Math.max(20, Math.min(40, baseSize)); // Min 20px, max 40px
+};
+
+// Use this function when rendering nodes
+const nodeSize = calculateNodeSize();
 
     // Prepare links for the simulation
     const linksForSimulation: LinkData[] = linksData
@@ -149,6 +252,13 @@ const NodeMap: React.FC<NodeMapProps> = ({
       gradient.append("stop").attr("offset", "100%").attr("stop-color", targetColor);
     });
 
+console.log('Links data check:', processedLinks.map(l => ({
+  sourceId: l.source,
+  targetId: l.target,
+  sourceExists: nodeMap.has(l.source as string),
+  targetExists: nodeMap.has(l.target as string)
+})));
+    
     linkElements = linksGroup.selectAll('line')
       .data(linksForSimulation as unknown as CustomSimulationLink[])
       .enter()
@@ -219,7 +329,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
       });
 
     nodeElements.append('circle')
-      .attr('r', (d: NodeData) => (d.size || 15) + 5)
+      .attr('r', (d: NodeData) => (d.size || 35) + 5)
       .style('fill', 'transparent')
       .style('filter', (d: NodeData) => {
         if (d.id === highlightedNodeId) return 'url(#glow-highlighted)';
@@ -243,7 +353,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .transition()
       .duration(800)
       .ease(easeBounce)
-      .attr('r', (d: NodeData) => d.size || 15);
+      .attr('r', (d: NodeData) => d.size || nodeSize);
 
     // Add pulsing animation for highlighted node
     if (highlightedNodeId) {
@@ -269,7 +379,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
     nodeElements.append('text')
       .text((d: NodeData) => d.label || d.id)
       .attr('x', 0)
-      .attr('y', (d: NodeData) => (d.size || 15) + 15)
+      .attr('y', (d: NodeData) => (d.size || 35) + 15)
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
       .style('fill', 'rgba(255, 255, 255, 0.9)')
@@ -280,11 +390,15 @@ const NodeMap: React.FC<NodeMapProps> = ({
     if (zoomToNode) {
       const targetNode = nodesData.find(node => node.id === zoomToNode);
       if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined && zoomRef.current) {
+        // Calculate transformations to center on the node
         const tx = width / 2 - targetNode.x;
         const ty = height / 2 - targetNode.y;
+        const scale = 1.5; // Slightly larger zoom level
+    
+        // Apply the transformation with a smooth transition
         zoomRef.current.transform(
           svgSelection.transition().duration(750) as Transition<SVGSVGElement, unknown, null, undefined>,
-          zoomIdentity.translate(tx, ty).scale(1.2)
+          zoomIdentity.translate(tx, ty).scale(scale)
         );
       }
     }
@@ -316,29 +430,49 @@ const NodeMap: React.FC<NodeMapProps> = ({
       }
     }
 
-    const linkForce: ForceLink<NodeData, CustomSimulationLink> = forceLink<NodeData, CustomSimulationLink>(linksForSimulation as CustomSimulationLink[])
-      .id((d: NodeData) => d.id)
-      .distance(100);
+   // Replace your current simulation code with this:
+const linkForce: ForceLink<NodeData, CustomSimulationLink> = forceLink<NodeData, CustomSimulationLink>(linksForSimulation as CustomSimulationLink[])
+  .id((d: NodeData) => d.id)
+  .distance(100);
 
-    const simulationInstance: Simulation<NodeData, CustomSimulationLink> = forceSimulation(nodesData)
-      .force('link', linkForce)
-      .force('charge', forceManyBody().strength(-150))
-      .force('center', forceCenter(width / 2, height / 2))
-      .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 15) + 15))
-      .force('x', forceX(width / 2).strength(0.05))
-      .force('y', forceY(height / 2).strength(0.05));
+const simulationInstance: Simulation<NodeData, CustomSimulationLink> = forceSimulation(nodesData)
+  .force('link', linkForce)
+  .force('charge', forceManyBody().strength(-300))
+  .force('center', forceCenter(width / 2, height / 2).strength(0.2)) // Increased strength
+  .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 25) + 20))
+  .force('x', forceX(width / 2).strength(0.1)) // Increased strength
+  .force('y', forceY(height / 2).strength(0.1)); // Increased strength
 
-    simulationRef.current = simulationInstance;
+simulationRef.current = simulationInstance;
 
-    simulationInstance.on('tick', () => {
-      linkElements
-        .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
-        .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
-        .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
-        .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
+// Run initial simulation ticks
+simulationInstance.alpha(1).restart();
+simulationInstance.tick(200);
 
-      nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
-    });
+// Add a tick event handler that constrains nodes to visible area
+simulationInstance.on('tick', () => {
+  // Constrain nodes to visible area
+  nodeElements.each((d: NodeData) => {
+    // Get the size of this node (or default)
+    const nodeSize = d.size || 25;
+    
+    // Constrain x position within visible area
+    d.x = Math.max(nodeSize, Math.min(width - nodeSize, d.x || width/2));
+    
+    // Constrain y position within visible area
+    d.y = Math.max(nodeSize, Math.min(height - nodeSize, d.y || height/2));
+  });
+  
+  // Update link positions
+  linkElements
+    .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
+    .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
+    .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
+    .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
+
+  // Update node positions
+  nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
+});
 
     // Tooltip
     const tooltip = g.append('g')
@@ -368,8 +502,8 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .append('circle')
       .attr('class', 'visit-indicator')
       .attr('r', 5)
-      .attr('cx', (d: NodeData) => (d.size || 15) * 0.6)
-      .attr('cy', (d: NodeData) => -(d.size || 15) * 0.6)
+      .attr('cx', (d: NodeData) => (d.size || 35) * 0.6)
+      .attr('cy', (d: NodeData) => -(d.size || 35) * 0.6)
       .style('fill', '#ffcc00')
       .style('stroke', '#fff')
       .style('stroke-width', 1);
@@ -378,8 +512,8 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
       .append('text')
       .attr('class', 'visit-count')
-      .attr('x', (d: NodeData) => (d.size || 15) * 0.6)
-      .attr('y', (d: NodeData) => -(d.size || 15) * 0.6 + 4)
+      .attr('x', (d: NodeData) => (d.size || 35) * 0.6)
+      .attr('y', (d: NodeData) => -(d.size || 35) * 0.6 + 4)
       .attr('text-anchor', 'middle')
       .style('font-size', '8px')
       .style('fill', '#000')
@@ -450,13 +584,16 @@ const NodeMap: React.FC<NodeMapProps> = ({
     };
   }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation]);
 
-  return (
+    return (
     <div className="node-map-container" style={{ 
       width: '100%', 
       height: '100%',
       overflow: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }}>
-      <svg ref={svgRef}></svg>
+      <svg ref={svgRef} style={{ width: '100%', height: '100%' }}></svg>
     </div>
   );
 };

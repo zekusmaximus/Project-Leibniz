@@ -43,16 +43,24 @@ const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   const getVisibleNodes = () => {
-    return Object.values(state.nodes).filter(node => node.isRevealed);
-  };
+  // Debug the nodes being returned
+  const visibleNodes = Object.values(state.nodes).filter(node => node.isRevealed);
+  console.log(`getVisibleNodes returning ${visibleNodes.length} nodes`);
+  console.log('Node IDs:', visibleNodes.map(n => n.id));
+  return visibleNodes;
+};
 
   const getVisibleLinks = () => {
-    return state.links.filter(link => 
-      link.isRevealed && 
-      state.nodes[link.source]?.isRevealed && 
-      state.nodes[link.target]?.isRevealed
-    );
-  };
+  // Debug the links being returned
+  const visibleLinks = state.links.filter(link => 
+    link.isRevealed && 
+    state.nodes[link.source]?.isRevealed && 
+    state.nodes[link.target]?.isRevealed
+  );
+  console.log(`getVisibleLinks returning ${visibleLinks.length} links`);
+  console.log('Link pairs:', visibleLinks.map(l => `${l.source}->${l.target}`));
+  return visibleLinks;
+};
 
   const value: StoryContextType = {
     state,

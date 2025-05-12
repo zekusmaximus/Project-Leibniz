@@ -1,9 +1,15 @@
+/* Optional font import for a more sci-fi feel */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
+
+
 /* client/src/index.css - enhanced version */
 html {
   margin: 0;
   padding: 0;
-  box-sizing: border-box; /* Apply to html element */
-  height: 100%; /* Ensure html takes full height */
+  box-sizing: border-box;
+  height: 100%; /* Keep this */
+  width: 100%;
+  overflow: hidden; /* Prevent scrollbars at the html level */
 }
 
 *,
@@ -39,11 +45,11 @@ a:hover {
 
 body {
   margin: 0;
-  padding: 0; /* Ensure body also has no padding */
-  /* display: flex; */ /* Potentially causing centering of #root */
-  /* justify-content: center; */ /* Potentially causing centering of #root */
+  padding: 0;
   min-width: 320px;
-  height: 100%; /* Ensure body takes full height of html */
+  width: 100%; /* Add this */
+  height: 100%; /* This is good */
+  overflow: hidden; /* Prevent scrollbars at the body level */
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(50, 100, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%),
     radial-gradient(circle at 90% 80%, rgba(100, 50, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%);
@@ -51,9 +57,9 @@ body {
 
 #root {
   width: 100%;
-  height: 100%; /* Make root take full height of body */
-  /* max-width: 1280px; */ /* Potential cause of horizontal constraint */
-  /* padding: 1rem; */ /* Potential cause of offsets */
+  height: 100%; /* Make sure root takes full height */
+  overflow: hidden; /* Prevent scrollbars */
+  position: relative; /* Good for absolute positioning within */
 }
 
 h1 {
@@ -179,6 +185,3 @@ button:focus-visible {
   border-radius: 4px;
   margin-left: 10px;
 }
-
-/* Optional font import for a more sci-fi feel */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');

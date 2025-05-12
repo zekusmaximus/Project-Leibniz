@@ -13,14 +13,19 @@ const NarrativePage = () => {
   const [backgroundColor, setBackgroundColor] = useState('#1e232d');
   
   useEffect(() => {
-    if (!nodeId) return;
-    
-    const currentNode = state.nodes[nodeId];
-    if (currentNode) {
-      setBackgroundColor(currentNode.color || '#1e232d');
+  if (!nodeId) return;
+  
+  // Make sure the node is marked as visited when arriving on this page
+  const currentNode = state.nodes[nodeId];
+  if (currentNode) {
+    // Only call visitNode if this is a new visit
+    if (currentNode.visitedCount === 0) {
+      visitNode(nodeId);
     }
-  }, [nodeId, state.nodes]);
-
+    
+    setBackgroundColor(currentNode.color || '#1e232d');
+  }
+}, [nodeId, state.nodes, visitNode]);
   // Get current node text
   const currentNodeText = nodeId 
     ? storyLogicService.getNodeText(nodeId, state) 
