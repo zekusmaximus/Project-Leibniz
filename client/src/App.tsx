@@ -1,11 +1,10 @@
-// client/src/App.tsx (updated to include MiniMap and SaveLoadControls)
+// client/src/App.tsx (updated for layout debugging with placeholders)
 import { useState, useEffect, useRef } from 'react';
 import StoryProvider from './context/StoryProvider';
 import { useStory } from './context/context';
 import storyLogicService from './services/StoryLogicService';
 import NodeMap from './components/NodeMap';
-import MiniMap from './components/MiniMap';
-// Changed from SaveLoadControls in services to components
+import MiniMap from './components/MiniMap'; // Restore MiniMap
 import SaveLoadControls from './services/SaveLoadControls'; 
 import type { NodeData, LinkData } from './components/NodeMap';
 import './App.css';
@@ -24,6 +23,7 @@ function StoryContent() {
   const { 
     state, 
     visitNode, 
+    // revealNode, // Not used with placeholders
     revealNode, 
     revealLink, 
     setFlag, 
@@ -36,21 +36,32 @@ function StoryContent() {
   const [d3Nodes, setD3Nodes] = useState<NodeData[]>([]);
   const [d3Links, setD3Links] = useState<LinkData[]>([]);
   const [currentStoryText, setCurrentStoryText] = useState<string>("");
-  const [showMiniMap, setShowMiniMap] = useState<boolean>(false);
+  const [showMiniMap, setShowMiniMap] = useState<boolean>(false); // Restore
   const [zoomTarget, setZoomTarget] = useState<string | undefined>(undefined);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const leftPanelRef = useRef<HTMLDivElement>(null); // Restore for NodeMap sizing
 
   // Responsive sizing based on container, not window
-  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  const [dimensions, setDimensions] = useState({ width: 800, height: 500 }); // Restore (used by NodeMap positioning logic)
+  const [mapDimensions, setMapDimensions] = useState({ width: 800, height: 500 }); // Restore for NodeMap
 
-  useEffect(() => {
+  useEffect(() => { // Original dimensions effect
+  //   function updateSize() {
+  //     if (containerRef.current) {
+  //       const rect = containerRef.current.getBoundingClientRect();
+  //       setDimensions({
+  //         width: Math.min(rect.width, 1200),
+  //         height: Math.min(rect.height, 600),
+  //       });
+  //     }
+  //   }
     function updateSize() {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         setDimensions({
-          width: Math.min(rect.width, 1200),
-          height: Math.min(rect.height, 600),
+          width: Math.min(rect.width, 1200), // This was from original, might need adjustment
+          height: Math.min(rect.height, 600), // This was from original, might need adjustment
         });
       }
     }
@@ -59,21 +70,34 @@ function StoryContent() {
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Update D3 nodes and links when story state changes
+  useEffect(() => { // Original mapDimensions effect
+    function updateMapSize() {
+      if (leftPanelRef.current) {
+        const rect = leftPanelRef.current.getBoundingClientRect();
+        setMapDimensions({
+          width: Math.max(rect.width, 300), // avoid 0 width
+          height: Math.max(rect.height, 300),
+        });
+      }
+    }
+    updateMapSize();
+    window.addEventListener('resize', updateMapSize);
+    return () => window.removeEventListener('resize', updateMapSize);
+  }, []);
+
+  // Update D3 nodes and links when story state changes - Restore full logic
   useEffect(() => {
-    // Convert story nodes to D3 nodes
     const visibleNodes = getVisibleNodes();
     const newD3Nodes = visibleNodes.map(node => ({
       id: node.id,
       label: node.label,
-      x: node.x || positionNodeOnGraph(node.id, dimensions.width, dimensions.height).x,
-      y: node.y || positionNodeOnGraph(node.id, dimensions.width, dimensions.height).y,
+      x: node.x, // Rely on initial positions or simulation
+      y: node.y,
       color: node.color,
       size: node.size,
       visitedCount: node.visitedCount
     }));
 
-    // Convert story links to D3 links
     const visibleLinks = getVisibleLinks();
     const newD3Links = visibleLinks.map(link => ({
       source: link.source,
@@ -85,166 +109,102 @@ function StoryContent() {
     setD3Nodes(newD3Nodes);
     setD3Links(newD3Links);
 
-    // Show mini-map if we have enough nodes
-    setShowMiniMap(newD3Nodes.length > 5);
+    // setShowMiniMap(newD3Nodes.length > 5); // Original condition
+    setShowMiniMap(newD3Nodes.length >= 1); // Temporarily change to show if any nodes exist for debugging
 
-    // Update story text
     const currentNode = getCurrentNode();
     if (currentNode) {
       setCurrentStoryText(storyLogicService.getNodeText(currentNode.id, state));
     }
 
-    // Run story logic rules
     const stateChanges = storyLogicService.evaluateState(state);
-    
-    // Apply rule effects
     if (stateChanges.flags) {
       Object.entries(stateChanges.flags).forEach(([key, value]) => {
         setFlag(key, value);
-        
-        // Handle special flags that affect the graph
-        handleSpecialFlag(key, value);
+        handleSpecialFlag(key, value); // Restore call
       });
     }
-  }, [state, dimensions.width, dimensions.height]);
+  }, [state, getVisibleNodes, getVisibleLinks, getCurrentNode, setFlag, dimensions, revealNode, revealLink]); // Added revealNode/Link to deps for handleSpecialFlag
 
- // Helper function to handle special flags that affect the graph
+  // Restore handleSpecialFlag function (copied from original App.tsx provided earlier)
   const handleSpecialFlag = (key: string, value: boolean | string | number | null) => {
     switch(key) {
       case 'initialPathsRevealed':
         if (value === true) {
-          // Reveal paths A and B
           revealNode('pathA', {
-            x: dimensions.width / 2 + 200,
+            x: dimensions.width / 2 + 200, // dimensions here refers to overall app container, might need mapDimensions for NodeMap specific coords
             y: dimensions.height / 2 - 100,
           });
           revealNode('pathB', {
             x: dimensions.width / 2 + 200,
             y: dimensions.height / 2 + 100,
           });
-          
-          // Reveal links
           revealLink({ source: 'start', target: 'pathA', color: '#777', isRevealed: true });
           revealLink({ source: 'start', target: 'pathB', color: '#777', isRevealed: true });
           revealLink({ source: 'pathA', target: 'start', color: '#777', isRevealed: true });
           revealLink({ source: 'pathB', target: 'start', color: '#777', isRevealed: true });
         }
         break;
-        
       case 'whisperSourceRevealed':
         if (value === true) {
           revealNode('whisperSource', {
             x: dimensions.width / 2 + 400,
             y: dimensions.height / 2 - 150,
           });
-          
           revealLink({ source: 'pathA', target: 'whisperSource', color: 'skyblue', isRevealed: true });
           revealLink({ source: 'whisperSource', target: 'pathA', color: 'skyblue', isRevealed: true });
         }
         break;
-        
       case 'echoChamberRevealed':
         if (value === true) {
           revealNode('echoChamber', {
             x: dimensions.width / 2 + 400,
             y: dimensions.height / 2 + 150,
           });
-          
           revealLink({ source: 'pathB', target: 'echoChamber', color: 'lightgreen', isRevealed: true });
           revealLink({ source: 'echoChamber', target: 'pathB', color: 'lightgreen', isRevealed: true });
         }
         break;
-        
       case 'secretPathDiscovered':
         if (value === true) {
-          // Create a secret node when a particular path is traveled
           revealNode('secretNode', {
             x: dimensions.width / 2 + 300,
             y: dimensions.height / 2,
             label: 'Hidden Chamber',
-            text: "You've discovered a hidden chamber between the two paths. The walls shimmer with symbols that seem to shift as you look at them.",
+            // text: "You've discovered a hidden chamber between the two paths. The walls shimmer with symbols that seem to shift as you look at them.", // Text is part of node definition in context
             color: '#ff5500',
             size: 18,
-            choices: [
-              { targetId: 'start', text: 'Return to the anomaly' },
-              { targetId: 'whisperSource', text: 'Go to the Source of Whispers' },
-              { targetId: 'echoChamber', text: 'Go to the Echo Chamber' }
-            ]
+            // choices: [ // Choices are part of node definition in context
+            //   { targetId: 'start', text: 'Return to the anomaly' },
+            //   { targetId: 'whisperSource', text: 'Go to the Source of Whispers' },
+            //   { targetId: 'echoChamber', text: 'Go to the Echo Chamber' }
+            // ]
           });
-          
-          // Connect the secret node
           revealLink({ source: 'secretNode', target: 'whisperSource', color: '#ff5500', isRevealed: true });
           revealLink({ source: 'secretNode', target: 'echoChamber', color: '#ff5500', isRevealed: true });
           revealLink({ source: 'secretNode', target: 'start', color: '#ff5500', isRevealed: true });
-          
-          // Set zoom target to the new node
           setZoomTarget('secretNode');
         }
         break;
-        
       case 'bothPathsVisited':
         if (value === true) {
-          // Update the start node appearance to indicate progression
           revealNode('start', {
-            color: '#9900cc', // Change color to indicate progression
-            text: "The anomaly pulses with new energy now that you've explored both paths. It feels more stable, yet somehow more complex."
+            color: '#9900cc',
+            // text: "The anomaly pulses with new energy now that you've explored both paths. It feels more stable, yet somehow more complex." // Text is part of node definition
           });
         }
         break;
     }
   };
 
-  // Helper function to determine node positions
-  const positionNodeOnGraph = (nodeId: string, width: number, height: number) => {
-    // Default to center
-    let x = width / 2;
-    let y = height / 2;
-    
-    // You can customize positions based on node ID or other factors
-    switch(nodeId) {
-      case 'start':
-        x = width / 2;
-        y = height / 2;
-        break;
-      case 'pathA':
-        x = width / 2 + 200;
-        y = height / 2 - 100;
-        break;
-      case 'pathB':
-        x = width / 2 + 200;
-        y = height / 2 + 100;
-        break;
-      case 'whisperSource':
-        x = width / 2 + 400;
-        y = height / 2 - 150;
-        break;
-      case 'echoChamber':
-        x = width / 2 + 400;
-        y = height / 2 + 150;
-        break;
-      case 'secretNode':
-        x = width / 2 + 300;
-        y = height / 2;
-        break;
-      // Add more cases for other nodes
-    }
-    
-    return { x, y };
-  };
-
-  // Handle node click in visualization
-  const handleNodeClick = (nodeId: string, clickedNodeData: NodeData) => {
-    console.log('Node clicked:', nodeId, clickedNodeData);
+  const handleNodeClick = (nodeId: string, _clickedNodeData: NodeData) => {
     visitNode(nodeId);
     setZoomTarget(nodeId);
-    
-    // Clear zoom target after animation
     setTimeout(() => setZoomTarget(undefined), 1000);
   };
-  
-  // Handle mini-map click for navigation
+
+  // Handle mini-map click for navigation (copied from original App.tsx)
   const handleMiniMapClick = (x: number, y: number) => {
-    // Find the closest node to the clicked point
     let closestNode: NodeData | undefined;
     let minDistance = Infinity;
     
@@ -259,58 +219,102 @@ function StoryContent() {
       }
     });
     
-    // If we found a close node, zoom to it
     if (closestNode) {
       setZoomTarget(closestNode.id);
+      // Clear zoom target after animation (optional, if NodeMap handles it)
+      // setTimeout(() => setZoomTarget(undefined), 1000); 
     }
   };
 
  return (
-    <div className="App" ref={containerRef} style={{height: '100vh', width: '100vw', overflow: 'hidden'}}>
-      <header className="App-header">
+    <div 
+      className="LeibnizProjectRootContainer"  // Changed className
+      ref={containerRef} 
+      style={{
+        display: 'flex', // Added for App to control its direct children
+        flexDirection: 'column', // App-header then main
+        height: '100vh', 
+        width: '100vw', 
+        // overflow: 'hidden', // Temporarily remove to see if it affects offset
+        margin: 0, // Ensure no default margin
+        padding: 0 // Ensure no default padding
+      }}
+    >
+      <header className="App-header" style={{ flexShrink: 0 /* Prevent header from shrinking */ }}>
         <h1>Interactive Speculative Fiction</h1>
         <SaveLoadControls className="save-controls" />
       </header>
-      <main style={{ 
-        position: 'relative', 
-        display: 'flex', 
-        flexDirection: 'row', 
-        height: `calc(100vh - 120px)`, // Adjust header height as needed
-        overflow: 'hidden'
-      }}>
-        <div style={{flex: 2, minWidth: 0, height: '100%'}}>
-          {(dimensions.width > 0 && dimensions.height > 0) && (
+      <main
+        style={{
+          flexGrow: 1, // Allow main to grow and take remaining space
+          display: 'flex',
+          flexDirection: 'row',
+          overflow: 'hidden', // Prevent internal scrollbars on main itself
+          // gap: '10px', // Removing gap for now
+          // padding: '10px', // Removing padding for now
+          boxSizing: 'border-box'
+        }}
+        >
+        {/* Left Panel - NodeMap */}
+        <div
+          ref={leftPanelRef} // Restored ref
+          style={{
+            flex: 2,
+            height: '100%',
+            background: '#f8f8fa', // Original background for this panel
+            display: 'flex', // Keep for centering NodeMap if smaller
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '12px', // Original style
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)', // Original style
+            // padding: '10px', // Padding was removed from main, can add here if needed around NodeMap
+            boxSizing: 'border-box'
+          }}
+        >
+          {(mapDimensions.width > 0 && mapDimensions.height > 0) && (
             <NodeMap
               nodesData={d3Nodes}
               linksData={d3Links}
               onNodeClick={handleNodeClick}
-              width={dimensions.width * 0.7}
-              height={dimensions.height}
+              width={mapDimensions.width}
+              height={mapDimensions.height}
               highlightedNodeId={state.currentNodeId}
               zoomToNode={zoomTarget}
             />
           )}
         </div>
-        <div style={{flex: 1, minWidth: 300, maxWidth: 400, display: 'flex', flexDirection: 'column', height: '100%'}}>
-          {showMiniMap && (
-            <MiniMap
-              nodesData={d3Nodes}
-              linksData={d3Links}
-              width={150}
-              height={150}
-              currentNodeId={state.currentNodeId}
-              onMiniMapClick={handleMiniMapClick}
-            />
-          )}
-          <div className="story-text-container" style={{ 
-            marginTop: '20px', 
-            maxHeight: 'calc(100% - 170px)', 
+
+        {/* Right Panel Placeholder (contents still placeholders) */}
+        <div
+          style={{
+            flex: 1,
+            height: '100%',
+            // background: 'lightskyblue', // Original right panel background was #fff
+            background: '#fff', // Restore original right panel background
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: '12px', // Original style
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)', // Original style
+            overflow: 'hidden', // Original style
+            // padding: '10px', // Padding was removed from main
+            boxSizing: 'border-box'
+            // gap: '10px' // Gap will be handled by padding/margins of children if needed
+          }}
+        >
+          {/* Narrative Area - Restored */}
+          <div className="story-text-container" style={{
+            flex: 2, // Takes 2/3 of right panel height
+            background: 'rgba(30, 35, 45, 0.8)', // Add dark background for light text
+            color: 'rgba(255, 255, 255, 0.9)', // Ensure text color contrasts
             overflowY: 'auto',
-            padding: '20px',
-            borderRadius: '8px'
+            padding: '20px', // Original padding
+            borderRadius: '8px', // Original style (top part of panel)
+            boxSizing: 'border-box'
+            // display: 'flex', alignItems: 'center', justifyContent: 'center' // Remove placeholder centering
+            // border: '1px dashed darkgrey' // Remove debug border
           }}>
+            {/* Original narrative content restored */}
             <p>{currentStoryText}</p>
-            
             {getCurrentNode()?.choices && (
               <div className="story-choices">
                 <p>What would you like to do?</p>
@@ -320,10 +324,10 @@ function StoryContent() {
                     .map((choice) => (
                       <button 
                         key={choice.targetId} 
-                        onClick={() => handleNodeClick(
+                        onClick={() => handleNodeClick( // Use handleNodeClick for consistency
                           choice.targetId, 
                           d3Nodes.find(n => n.id === choice.targetId) || 
-                          { id: choice.targetId, label: choice.text, visitedCount: 0 }
+                          { id: choice.targetId, label: choice.text, visitedCount: 0 } // Provide dummy NodeData if not found
                         )}
                         className="choice-button"
                       >
@@ -333,6 +337,32 @@ function StoryContent() {
                   }
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* MiniMap Area - Restored */}
+          <div style={{
+            flex: 1, // Takes 1/3 of right panel height
+            // background: 'lightgoldenrodyellow', // Remove placeholder background
+            width: '100%', // Ensure it takes full width of its column flex container
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderTop: '1px solid #eee', // Original style
+            background: '#fafbfc', // Original style
+            // padding: '10px', // Padding was in original MiniMap div, not this container
+            boxSizing: 'border-box'
+            // border: '1px dashed darkgrey' // Remove debug border
+          }}>
+            {showMiniMap && (
+              <MiniMap
+                nodesData={d3Nodes}
+                linksData={d3Links}
+                width={150} // Original fixed size
+                height={150} // Original fixed size
+                currentNodeId={state.currentNodeId}
+                onMiniMapClick={handleMiniMapClick}
+              />
             )}
           </div>
         </div>

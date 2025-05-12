@@ -1,4 +1,17 @@
 /* client/src/index.css - enhanced version */
+html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box; /* Apply to html element */
+  height: 100%; /* Ensure html takes full height */
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit; /* Inherit from html */
+}
+
 :root {
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -26,10 +39,11 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  justify-content: center;
+  padding: 0; /* Ensure body also has no padding */
+  /* display: flex; */ /* Potentially causing centering of #root */
+  /* justify-content: center; */ /* Potentially causing centering of #root */
   min-width: 320px;
-  min-height: 100vh;
+  height: 100%; /* Ensure body takes full height of html */
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(50, 100, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%),
     radial-gradient(circle at 90% 80%, rgba(100, 50, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%);
@@ -37,8 +51,9 @@ body {
 
 #root {
   width: 100%;
-  max-width: 1280px;
-  padding: 1rem;
+  height: 100%; /* Make root take full height of body */
+  /* max-width: 1280px; */ /* Potential cause of horizontal constraint */
+  /* padding: 1rem; */ /* Potential cause of offsets */
 }
 
 h1 {
@@ -72,15 +87,15 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-.node-map-container {
+/* .node-map-container {
   background: rgba(20, 25, 35, 0.5);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   padding: 1rem;
   margin-bottom: 2rem;
-}
+} */
 
-.story-text-container {
+/* .story-text-container {
   background: rgba(30, 35, 45, 0.6);
   border-radius: 12px;
   border: 1px solid rgba(100, 165, 255, 0.2);
@@ -89,7 +104,7 @@ button:focus-visible {
   line-height: 1.6;
   font-size: 1.1rem;
   transition: all 0.3s ease;
-}
+} */
 
 .story-text-container:hover {
   border-color: rgba(100, 165, 255, 0.3);
@@ -97,38 +112,38 @@ button:focus-visible {
 }
 
 /* Add to client/src/App.css */
-.App {
+/* .App {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   width: 100vw;
   overflow: hidden;
-}
+} */
 
-main {
+/* main {
   flex: 1;
   display: flex;
   flex-direction: row;
   width: 100%;
   height: 100%;
   overflow: hidden;
-}
+} */
 
-.node-map-container {
+/* .node-map-container {
   flex: 2 1 0%;
   min-width: 0;
   height: 100%;
-}
+} */
 
-.story-text-container {
+/* .story-text-container {
   flex: 1 1 0%;
   min-width: 300px;
   max-width: 400px;
   overflow-y: auto;
   max-height: calc(100% - 170px);
-}
+} */
 
-.mini-map {
+/* .mini-map {
   position: absolute;
   top: 20px;
   right: 20px;
@@ -136,7 +151,7 @@ main {
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   border-radius: 4px;
   overflow: hidden;
-}
+} */
 
 .save-load-controls {
   display: flex;

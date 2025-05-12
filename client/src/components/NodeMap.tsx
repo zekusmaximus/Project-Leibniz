@@ -71,51 +71,51 @@ const NodeMap: React.FC<NodeMapProps> = ({
     const svgSelection = select(svgRef.current);
     svgSelection.selectAll('*').remove();
 
-    svgSelection.attr('width', width)
-      .attr('height', height)
-      .style('border', '1px solid rgba(255, 255, 255, 0.1)')
+    svgSelection.attr('width', '100%') // Make SVG fill its container
+      .attr('height', '100%') // Make SVG fill its container
+      .style('border', '1px solid rgba(255, 255, 255, 0.1)') // This border might be on the SVG itself
       .style('border-radius', '8px')
-      .style('background', 'rgba(20, 25, 35, 0.5)');
+      .style('background', 'transparent'); // Inherit background from parent or set as needed
 
     const g = svgSelection.append('g').attr('class', 'main-group') as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
 
-    // Minimap view
-    const minimapWidth = 160;
-    const minimapHeight = 120;
-    const minimapScale = 0.2;
-    const minimap = (svgSelection.append('g')
-      .attr('class', 'minimap')
-      .attr('transform', `translate(${width - minimapWidth - 10}, 10)`)
-      .style('pointer-events', 'none')) as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
+    // Minimap view - REMOVED FROM NODEMAP COMPONENT
+    // const minimapWidth = 160;
+    // const minimapHeight = 120;
+    // const minimapScale = 0.2;
+    // const minimap = (svgSelection.append('g')
+    //   .attr('class', 'minimap')
+    //   .attr('transform', `translate(${width - minimapWidth - 10}, 10)`)
+    //   .style('pointer-events', 'none')) as unknown as Selection<SVGGElement, unknown, SVGSVGElement, unknown>;
 
-    minimap.append('rect')
-      .attr('width', minimapWidth)
-      .attr('height', minimapHeight)
-      .attr('fill', 'rgba(0,0,0,0.2)')
-      .attr('stroke', '#888');
+    // minimap.append('rect')
+    //   .attr('width', minimapWidth)
+    //   .attr('height', minimapHeight)
+    //   .attr('fill', 'rgba(0,0,0,0.2)')
+    //   .attr('stroke', '#888');
 
-    minimap.append('g').attr('transform', `scale(${minimapScale})`); // minimapContent was not read
-    minimap.append('rect')                                         // minimapView was not read
-      .attr('class', 'minimap-view')
-      .attr('fill', 'none')
-      .attr('stroke', '#ffcc00')
-      .attr('stroke-width', 1);
+    // minimap.append('g').attr('transform', `scale(${minimapScale})`); // minimapContent was not read
+    // minimap.append('rect')                                         // minimapView was not read
+    //   .attr('class', 'minimap-view')
+    //   .attr('fill', 'none')
+    //   .attr('stroke', '#ffcc00')
+    //   .attr('stroke-width', 1);
 
-    minimap
-      .style('pointer-events', 'all')
-      .on('click', function (this: SVGGElement, event: MouseEvent) { // Explicitly type 'this'
-        const [mx, my] = pointer(event, this);
-        const scale = 1 / minimapScale;
-        const tx = -mx * scale + width / 2;
-        const ty = -my * scale + height / 2;
-        if (zoomRef.current) {
-          // Correct way to apply a programmatic zoom transform
-          zoomRef.current.transform(
-            svgSelection.transition().duration(500) as Transition<SVGSVGElement, unknown, null, undefined>,
-            zoomIdentity.translate(tx, ty).scale(1)
-          );
-        }
-      });
+    // minimap
+    //   .style('pointer-events', 'all')
+    //   .on('click', function (this: SVGGElement, event: MouseEvent) { // Explicitly type 'this'
+    //     const [mx, my] = pointer(event, this);
+    //     const scale = 1 / minimapScale;
+    //     const tx = -mx * scale + width / 2;
+    //     const ty = -my * scale + height / 2;
+    //     if (zoomRef.current) {
+    //       // Correct way to apply a programmatic zoom transform
+    //       zoomRef.current.transform(
+    //         svgSelection.transition().duration(500) as Transition<SVGSVGElement, unknown, null, undefined>,
+    //         zoomIdentity.translate(tx, ty).scale(1)
+    //       );
+    //     }
+    //   });
 
     // Define zoom behavior
     const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
@@ -459,15 +459,15 @@ const NodeMap: React.FC<NodeMapProps> = ({
   return (
      <div className="node-map-container" style={{ 
     width: '100%', 
-    height: `${height}px`, 
-    minHeight: '400px', // Ensure minimum height
-    margin: '0 auto',
+    height: '100%', // Ensure div takes full height of its flex parent in App.tsx
+    // minHeight: '400px', // Let flexbox determine height
+    margin: '0 auto', // This might still cause centering issues if parent is not handling alignment
     overflow: 'hidden',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: '8px',
-    background: 'rgba(20, 25, 35, 0.5)'
+    // border: '1px solid rgba(255, 255, 255, 0.1)', // Border is now on SVG or parent panel
+    // borderRadius: '8px', // borderRadius is on parent panel in App.tsx
+    // background: 'rgba(20, 25, 35, 0.5)' // Background is on parent panel in App.tsx or SVG
   }}>
-    <svg ref={svgRef} width={width} height={height}></svg>
+    <svg ref={svgRef} /* width and height are now 100% set in useEffect */ ></svg>
   </div>
   );
 };

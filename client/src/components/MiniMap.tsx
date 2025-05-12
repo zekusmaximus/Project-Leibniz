@@ -130,10 +130,11 @@ const MiniMap: React.FC<MiniMapProps> = ({
 
   return (
     <div className="mini-map" style={{ 
-      position: 'absolute', // Note: This position might need to be handled by parent or via props for flexibility
-      right: '20px',
-      zIndex: 10,
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+      // position: 'absolute', // Removed to allow flex positioning from parent
+      // right: '20px',       // Removed
+      zIndex: 10, // Keep if layering is needed locally
+      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)' // Keep for appearance
+      // The component will now be centered by its flex parent in App.tsx
     }}>
       <svg ref={svgRef}></svg>
     </div>

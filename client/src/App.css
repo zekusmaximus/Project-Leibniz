@@ -1,9 +1,4 @@
-#root {
-  max-width: 100% !important; /* Override any constraints */
-  padding: 1rem !important;
-  margin: 0 !important;
-  width: 100% !important;
-}
+/* #root style removed as it's handled in index.css or App.tsx */
 
 .logo {
   height: 6em;
@@ -71,63 +66,69 @@
 }
 
 /* For a better mobile experience */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
   .story-text-container {
     width: 90%;
     margin: 10px auto;
   }
-}
+} */
 
 
 .App {
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
+  /* display: flex; */ /* Handled by inline styles in App.tsx for main layout */
+  /* flex-direction: column; */ /* Handled by inline styles in App.tsx */
 }
 
 .App-header {
   width: 100%;
   margin-bottom: 20px;
+  /* Styles below are for centering header content if needed, but not for main layout */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 main {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  overflow-y: auto;
-  padding-bottom: 20px;
+  /* display: flex; */ /* Handled by inline styles in App.tsx */
+  /* flex-direction: column; */ /* Handled by inline styles in App.tsx */
+  /* align-items: center; */ /* Handled by inline styles in App.tsx */
+  position: relative; /* This might be okay, but check if it causes issues with App.tsx's flex */
+  /* overflow-y: auto; */ /* Potentially conflicting with panel-specific overflow */
+  /* padding-bottom: 20px; */ /* Potentially conflicting with panel-specific padding */
 }
 
-.node-map-container {
-  width: 100%;
-  height: 60vh;
-  max-height: 600px;
-  margin-bottom: 20px;
-  position: relative;
-}
+/* .node-map-container { */ /* This class is not directly used in App.tsx's new structure */
+  /* width: 100%; */
+  /* height: 60vh; */
+  /* max-height: 600px; */
+  /* margin-bottom: 20px; */
+  /* position: relative; */
+/* } */
 
 .story-text-container {
-  width: 100%;
-  max-width: 1000px;
-  padding: 20px;
-  margin: 0 auto;
-  box-sizing: border-box;
-  overflow-y: auto;
-  max-height: 300px;
+  /* width: 100%; */ /* Let flexbox control width */
+  /* max-width: 1000px; */ /* Let flexbox determine width */
+  padding: 20px; /* Padding inside the container is fine */
+  /* margin: 0 auto; */ /* Avoid margin auto on flex items for now */
+  box-sizing: border-box; /* Good practice */
+  overflow-y: auto; /* Good for scrollable content */
+  /* max-height: 300px; */ /* Let flexbox determine height */
+  /* Add a temporary border to see its bounds during layout debugging */
+  /* border: 1px dashed lime; */ 
 }
 
-.mini-map {
-  position: absolute !important;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-  width: 150px;
-  height: 150px;
-}
+/* .mini-map { */ /* This class is not directly used for the MiniMap container in App.tsx's new structure */
+  /* position: absolute !important; */ /* This was causing the overlay issue */
+  /* top: 20px; */
+  /* right: 20px; */
+  /* z-index: 10; */
+  /* width: 150px; */ /* Size is set on the MiniMap component directly */
+  /* height: 150px; */
+/* } */
 
 /* Ensure the save controls are properly positioned */
 .save-controls {
