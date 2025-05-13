@@ -4,28 +4,86 @@ import { motion } from 'framer-motion';
 import { useStory } from '../context/context';
 import MiniMap from '../components/MiniMap';
 import storyLogicService from '../services/StoryLogicService';
-import { useEffect, useState } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 const NarrativePage = () => {
   const { nodeId } = useParams<{ nodeId: string }>();
   const navigate = useNavigate();
-  const { state, visitNode, getVisibleNodes, getVisibleLinks, getCurrentNode } = useStory();
+  const { state, visitNode, revealNode, revealLink, getVisibleNodes, getVisibleLinks, getCurrentNode } = useStory();
   const [backgroundColor, setBackgroundColor] = useState('#1e232d');
   
-  useEffect(() => {
-  if (!nodeId) return;
+  // Add this ref for the mini map zoom function
+  const miniMapZoomToFitRef = useRef<(() => void) | null>(null);
   
-  // Make sure the node is marked as visited when arriving on this page
-  const currentNode = state.nodes[nodeId];
-  if (currentNode) {
-    // Only call visitNode if this is a new visit
-    if (currentNode.visitedCount === 0) {
-      visitNode(nodeId);
+  // Add the handler
+  const handleMiniMapZoomToFit = useCallback(() => {
+    if (miniMapZoomToFitRef.current) {
+      miniMapZoomToFitRef.current();
     }
+  }, []);
+
+  // Effect to handle node visiting and revealing connected paths
+  useEffect(() => {
+    if (!nodeId) return;
     
-    setBackgroundColor(currentNode.color || '#1e232d');
-  }
-}, [nodeId, state.nodes, visitNode]);
+    const currentNode = state.nodes[nodeId];
+    if (currentNode) {
+      // First, make sure current node is revealed
+      if (!currentNode.isRevealed) {
+        console.log(`Revealing node ${nodeId} on page visit`);
+        revealNode(nodeId, { ...currentNode, isRevealed: true });
+      }
+      
+      // Then visit it to update count if not already visited
+      if (!state.visitCounts[nodeId] || state.visitCounts[nodeId] === 0) {
+        console.log(`Marking node ${nodeId} as visited`);
+        visitNode(nodeId);
+      }
+      
+      // Next, make sure any choices are revealed as nodes
+      if (currentNode.choices) {
+        currentNode.choices.forEach(choice => {
+          const targetNode = state.nodes[choice.targetId];
+          if (targetNode) {
+            // Reveal the target node
+            if (!targetNode.isRevealed) {
+              console.log(`Revealing choice target node ${choice.targetId}`);
+              revealNode(choice.targetId, { ...targetNode, isRevealed: true });
+            }
+            
+            // Find and reveal the link between current node and target
+            const linkToReveal = state.links.find(link => 
+              link.source === nodeId && 
+              link.target === choice.targetId
+            );
+            
+            if (linkToReveal && !linkToReveal.isRevealed) {
+              console.log(`Revealing link from ${nodeId} to ${choice.targetId}`);
+              revealLink({
+                ...linkToReveal,
+                isRevealed: true
+              });
+            }
+          }
+        });
+      }
+      
+      // Also reveal any links coming into this node
+      state.links.forEach(link => {
+        if (link.target === nodeId && !link.isRevealed) {
+          const sourceNode = state.nodes[link.source];
+          if (sourceNode && sourceNode.isRevealed) {
+            console.log(`Revealing incoming link from ${link.source} to ${nodeId}`);
+            revealLink({ ...link, isRevealed: true });
+          }
+        }
+      });
+      
+      // Set background color based on node
+      setBackgroundColor(currentNode.color || '#1e232d');
+    }
+  }, [nodeId, state.nodes, state.links, visitNode, revealNode, revealLink]);
+  
   // Get current node text
   const currentNodeText = nodeId 
     ? storyLogicService.getNodeText(nodeId, state) 
@@ -49,6 +107,11 @@ const NarrativePage = () => {
     width: link.width
   }));
 
+  // For debugging
+  console.log(`NarrativePage rendering with ${d3Nodes.length} nodes and ${d3Links.length} links`);
+  console.log('Visible node IDs:', d3Nodes.map(n => n.id));
+  console.log('Visible link pairs:', d3Links.map(l => `${l.source}->${l.target}`));
+
   const handleMiniMapClick = (x: number, y: number) => {
     // Find the closest node to the clicked coordinates
     let closestNode = d3Nodes[0];
@@ -66,14 +129,18 @@ const NarrativePage = () => {
     });
     
     // Navigate to the selected node
-    navigate(`/narrative/${closestNode.id}`);
-    visitNode(closestNode.id);
+    if (closestNode && closestNode.id) {
+      console.log(`MiniMap click navigating to node ${closestNode.id}`);
+      navigate(`/narrative/${closestNode.id}`);
+      visitNode(closestNode.id);
+    }
   };
 
   const handleBackToMap = () => {
     navigate('/');
   };
 
+  // Filter choices based on conditions if present
   const nodeChoices = getCurrentNode()?.choices?.filter(
     choice => !choice.condition || choice.condition(state)
   );
@@ -105,8 +172,34 @@ const NarrativePage = () => {
                   <button 
                     key={choice.targetId} 
                     onClick={() => {
-                      navigate(`/narrative/${choice.targetId}`);
+                      // First, make sure the target node is revealed
+                      const targetNode = state.nodes[choice.targetId];
+                      if (targetNode && !targetNode.isRevealed) {
+                        console.log(`Revealing target node ${choice.targetId} on choice click`);
+                        revealNode(choice.targetId, {
+                          ...targetNode,
+                          isRevealed: true
+                        });
+                      }
+                      
+                      // Next, reveal the link between current node and target
+                      const link = state.links.find(l => 
+                        l.source === nodeId && 
+                        l.target === choice.targetId
+                      );
+                      if (link && !link.isRevealed) {
+                        console.log(`Revealing link from ${nodeId} to ${choice.targetId} on choice click`);
+                        revealLink({
+                          ...link,
+                          isRevealed: true
+                        });
+                      }
+                      
+                      // Then visit the node (this will increment visit count)
                       visitNode(choice.targetId);
+                      
+                      // Finally navigate to the target node
+                      navigate(`/narrative/${choice.targetId}`);
                     }}
                     className="choice-button"
                   >
@@ -120,6 +213,26 @@ const NarrativePage = () => {
       </div>
       
       <div className="mini-map-container">
+        {/* Add zoom control to mini map */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          marginBottom: '5px' 
+        }}>
+          <button
+            onClick={handleMiniMapZoomToFit}
+            title="Fit all nodes in view"
+            className="mini-map-zoom-button"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6"></path>
+              <path d="M9 21H3v-6"></path>
+              <path d="M21 3l-7 7"></path>
+              <path d="M3 21l7-7"></path>
+            </svg>
+          </button>
+        </div>
+        
         <MiniMap
           nodesData={d3Nodes}
           linksData={d3Links}
@@ -127,6 +240,7 @@ const NarrativePage = () => {
           height={180}
           currentNodeId={nodeId}
           onMiniMapClick={handleMiniMapClick}
+          onZoomToFitRef={miniMapZoomToFitRef}
         />
       </div>
     </motion.div>

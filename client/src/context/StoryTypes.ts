@@ -47,6 +47,7 @@ export interface StoryContextType {
   getCurrentNode: () => StoryNode | undefined;
   getVisibleNodes: () => StoryNode[];
   getVisibleLinks: () => StoryLink[];
+  dispatch: React.Dispatch<StoryAction>; // Add dispatch function
 }
 
 // Define action types
@@ -56,4 +57,5 @@ export type StoryAction =
   | { type: 'REVEAL_LINK'; link: StoryLink }
   | { type: 'SET_FLAG'; key: string; value: boolean | number | string }
   | { type: 'RESET_STORY' }
-  | { type: 'LOAD_STORY'; state: StoryState };
+  | { type: 'LOAD_STORY'; state: StoryState }
+  | { type: 'UPDATE_NODE_POSITIONS'; nodes: { id: string; x: number; y: number }[] };

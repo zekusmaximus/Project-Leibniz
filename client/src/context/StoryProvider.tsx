@@ -72,7 +72,8 @@ const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     loadStory,
     getCurrentNode,
     getVisibleNodes,
-    getVisibleLinks
+    getVisibleLinks,
+    dispatch // Add dispatch here
   };
 
   return (

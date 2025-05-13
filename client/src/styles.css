@@ -1,4 +1,100 @@
-/* Add to src/App.css or create a new file like styles.css */
+/* Add to src/styles.css */
+
+/* Optional font import for a more sci-fi feel */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
+
+/* Base HTML and Body Styles */
+html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #101318;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #64a5ff;
+  text-decoration: inherit;
+  transition: color 0.3s ease;
+}
+a:hover {
+  color: #95c7ff;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(50, 100, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%),
+    radial-gradient(circle at 90% 80%, rgba(100, 50, 150, 0.03) 0%, rgba(0, 0, 0, 0) 80%);
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Typography */
+h1 {
+  font-size: 2.5em;
+  line-height: 1.1;
+  background: linear-gradient(90deg, #64a5ff, #c093ff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+/* Buttons */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1f2937;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+button:hover {
+  border-color: #64a5ff;
+  background-color: #283548;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
 
 /* HomePage Styles */
 .home-page {
@@ -11,16 +107,34 @@
   background-color: #101318;
   padding: 20px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+.title-container {
+  width: 100%;
+  padding: 20px 0;
+  margin-bottom: 30px;
+  text-align: center;
 }
 
 .title {
   font-size: 3rem;
-  margin-bottom: 40px;
+  margin: 0;
   text-align: center;
   background: linear-gradient(90deg, #64a5ff, #c093ff);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.map-controls {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px;
+  margin-bottom: 10px;
+  z-index: 10;
 }
 
 .node-map-container {
@@ -29,6 +143,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  min-height: 60vh;
+  overflow: hidden;
 }
 
 /* NarrativePage Styles */
@@ -86,6 +205,14 @@
 .story-text-container {
   line-height: 1.7;
   font-size: 1.1rem;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.story-text-container:hover {
+  border-color: rgba(100, 165, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .story-choices {
@@ -115,4 +242,119 @@
 
 .choice-button:hover {
   background-color: rgba(100, 108, 255, 0.4);
+}
+
+/* Save/Load Controls */
+.save-load-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.save-load-controls button {
+  padding: 8px 16px;
+  background-color: rgba(100, 108, 255, 0.2);
+  border: 1px solid #646cff;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  border-radius: 4px;
+}
+
+.save-load-controls button:hover {
+  background-color: rgba(100, 108, 255, 0.4);
+}
+
+.save-message {
+  padding: 5px 10px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+/* Zoom Buttons */
+.zoom-to-fit-button {
+  background-color: rgba(100, 108, 255, 0.2);
+  border: 1px solid #646cff;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.zoom-to-fit-button:hover {
+  background-color: rgba(100, 108, 255, 0.4);
+}
+
+.mini-map-zoom-button {
+  background-color: rgba(100, 108, 255, 0.15);
+  border: 1px solid rgba(100, 108, 255, 0.4);
+  border-radius: 3px;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.mini-map-zoom-button:hover {
+  background-color: rgba(100, 108, 255, 0.25);
+}
+
+/* App Root Container */
+.LeibnizProjectRootContainer {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Media Queries for Responsiveness */
+@media (max-width: 768px) {
+  .title {
+    font-size: 2rem;
+  }
+  
+  .narrative-content {
+    padding: 20px;
+  }
+  
+  .mini-map-container {
+    bottom: 20px;
+    right: 20px;
+    padding: 5px;
+  }
+  
+  .choice-button {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-page, 
+  .narrative-page {
+    padding: 15px;
+  }
+  
+  .title {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+  }
+  
+  .node-map-container {
+    min-height: 50vh;
+  }
+  
+  .mini-map-container {
+    width: 120px;
+    height: 120px;
+  }
 }

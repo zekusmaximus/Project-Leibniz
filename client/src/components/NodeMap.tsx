@@ -1,12 +1,12 @@
 // src/components/NodeMap.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { select, type Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior, type D3ZoomEvent } from 'd3-zoom';
 import { drag, type DragBehavior, type D3DragEvent } from 'd3-drag';
+import { useStory } from '../context/context'; // Import useStory
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type Simulation, type SimulationLinkDatum, type ForceLink } from 'd3-force';
 import 'd3-transition';
-import { type Transition } from 'd3-transition';
-import { easeBounce } from 'd3-ease';
+import { easeBounce, easeQuadOut } from 'd3-ease';
 
 export interface NodeData {
   iconUrl?: string;
@@ -44,7 +44,8 @@ interface NodeMapProps {
   height?: number;
   highlightedNodeId?: string;
   zoomToNode?: string;
-  enableZoomAnimation?: boolean; // Added this prop
+  enableZoomAnimation?: boolean;
+  onZoomToFitRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 type D3NodeSelection = Selection<SVGGElement, NodeData, SVGGElement, unknown>;
@@ -58,9 +59,10 @@ const NodeMap: React.FC<NodeMapProps> = ({
   height = 600,
   highlightedNodeId,
   zoomToNode,
-  enableZoomAnimation = false, // Added default value
+  enableZoomAnimation = false,
+  onZoomToFitRef,
 }) => {
-  // Add this console log to debug input data
+  // Debug input data
   console.log('NodeMap received:', {
     nodesLength: nodesData.length,
     linksLength: linksData.length,
@@ -88,102 +90,202 @@ const NodeMap: React.FC<NodeMapProps> = ({
   // Refs to store selections for later use in animations
   const nodeElementsRef = useRef<D3NodeSelection | null>(null);
   const linkElementsRef = useRef<D3LinkSelection | null>(null);
+  const { dispatch } = useStory(); // Get dispatch from context
+
+  // Function to zoom to fit all nodes in view
+  const zoomToFit = useCallback((
+    duration: number = 750, 
+    paddingPercent: number = 0.85
+  ) => {
+    if (!svgRef.current || !nodesData.length || !zoomRef.current) return;
+    
+    const svg = select(svgRef.current);
+    const bounds = {
+      x: { min: Infinity, max: -Infinity },
+      y: { min: Infinity, max: -Infinity }
+    };
+
+    // Calculate bounds of all visible nodes
+    nodesData.forEach(node => {
+      if (node.x === undefined || node.y === undefined) return;
+      
+      const x = node.x;
+      const y = node.y;
+      const nodeSize = node.size || 25;
+      
+      bounds.x.min = Math.min(bounds.x.min, x - nodeSize);
+      bounds.x.max = Math.max(bounds.x.max, x + nodeSize);
+      bounds.y.min = Math.min(bounds.y.min, y - nodeSize);
+      bounds.y.max = Math.max(bounds.y.max, y + nodeSize);
+    });
+    
+    // Only proceed if we have valid bounds
+    if (bounds.x.min === Infinity || nodesData.length <= 1) {
+      // For a single node, center on it with a fixed scale
+      const node = nodesData[0];
+      if (node && node.x !== undefined && node.y !== undefined) {
+        const tx = width / 2 - node.x;
+        const ty = height / 2 - node.y;
+        zoomRef.current.transform(
+          svg.transition().duration(duration),
+          zoomIdentity.translate(tx, ty).scale(1.2)
+        );
+      }
+      return;
+    }
+    
+    // Calculate the scale to fit all nodes with padding
+    const dx = bounds.x.max - bounds.x.min;
+    const dy = bounds.y.max - bounds.y.min;
+    const x = (bounds.x.min + bounds.x.max) / 2;
+    const y = (bounds.y.min + bounds.y.max) / 2;
+    
+    // Prevent division by zero
+    if (dx === 0 || dy === 0) return;
+    
+    const scale = paddingPercent / Math.max(dx / width, dy / height);
+    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+    
+    // Apply the transform
+    zoomRef.current.transform(
+      svg.transition().duration(duration),
+      zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+    );
+  }, [nodesData, width, height]);
+
+  // Function to animate node expansion
+  const animateNodeExpansion = useCallback((
+    nodeId: string, 
+    nodeElements: D3NodeSelection,
+    linkElements: D3LinkSelection,
+    maxRadius: number
+  ) => {
+    // Find the target node
+    const targetNode = nodeElements
+      .filter((d: NodeData) => d.id === nodeId)
+      .select('.node-main-circle');
+    
+    if (!targetNode.empty()) {
+      // Get current radius before animation
+      const currentRadius = parseFloat(targetNode.attr('r') || '0');
+      
+      // Create an expanding circle from the current node's position
+      targetNode
+        .transition()
+        .duration(1200) // Slower animation
+        .ease(easeQuadOut)
+        .attr('r', maxRadius)
+        .style('fill-opacity', 0.7); // Semi-transparent as it expands
+      
+      // Add a pulse effect before expansion
+      targetNode
+        .transition()
+        .duration(300)
+        .attr('r', currentRadius * 1.2)
+        .transition()
+        .duration(1200)
+        .attr('r', maxRadius);
+      
+      // Fade out other elements
+      nodeElements
+        .filter((d: NodeData) => d.id !== nodeId)
+        .transition()
+        .duration(600)
+        .style('opacity', 0);
+        
+      linkElements
+        .transition()
+        .duration(500)
+        .style('opacity', 0);
+    }
+  }, []);
+
+  // Expose the zoomToFit function through the ref
+  useEffect(() => {
+    if (onZoomToFitRef) {
+      onZoomToFitRef.current = () => zoomToFit(750, 0.85);
+    }
+    
+    return () => {
+      if (onZoomToFitRef) {
+        onZoomToFitRef.current = null;
+      }
+    };
+  }, [onZoomToFitRef, zoomToFit]);
 
   useEffect(() => {
     if (!svgRef.current || !nodesData.length) return;
 
-// Make sure we have valid data to render
-  if (nodesData.length === 0) {
-    console.log('No nodes to display');
-    return;
-  }
-  
-  console.log(`Rendering ${nodesData.length} nodes and ${linksData.length} links`);
+    // Make sure we have valid data to render
+    if (nodesData.length === 0) {
+      console.log('No nodes to display');
+      return;
+    }
+    
+    console.log(`Rendering ${nodesData.length} nodes and ${linksData.length} links`);
 
     // Clear previous SVG content and refs
-  const svgSelection = select(svgRef.current);
-  svgSelection.selectAll('*').remove();
-  nodeElementsRef.current = null;
-  linkElementsRef.current = null;
+    const svgSelection = select(svgRef.current);
+    svgSelection.selectAll('*').remove();
+    nodeElementsRef.current = null;
+    linkElementsRef.current = null;
 
-  // Set full size
- svgSelection.attr('width', width)
-  .attr('height', height)
-  .style('display', 'block') // Ensure it's a block element
-  .style('margin', '0 auto') // Center it horizontally
-  .style('overflow', 'hidden'); // Hide anything outside bounds
+    // Set full size
+    svgSelection.attr('width', width)
+      .attr('height', height)
+      .style('display', 'block')
+      .style('margin', '0 auto')
+      .style('overflow', 'visible'); // Changed from 'hidden' to allow overflow
 
-  // Create main group for all elements
-  const g = svgSelection.append('g').attr('class', 'main-group');
-  const initialScale = 1.2; // Slightly zoomed in by default
-  const initialTransform = zoomIdentity
-    .translate(width / 2, height / 2)
-    .scale(initialScale);
-  g.attr('transform', initialTransform.toString());
-
-   // Create map of nodeId to node for faster lookup
-  const nodeMap = new Map<string, NodeData>();
-  nodesData.forEach((node, i) => {
-  // Get the node size (or default)
-  const nodeSize = node.size || 25;
-  
-  if (node.x === undefined || node.y === undefined) {
-    // Position nodes in a circle formation centered in the visible area
-    const angle = (i * (2 * Math.PI)) / nodesData.length;
-    const radius = Math.min(width, height) * 0.3;
+    // Create main group for all elements
+    const g = svgSelection.append('g').attr('class', 'main-group');
     
-    // Center at width/2, height/2 to place in middle of container
-    node.x = (width / 2) + Math.cos(angle) * radius;
-    node.y = (height / 2) + Math.sin(angle) * radius;
-  }
-  
-  // Regardless of how position was set, constrain within visible area
-  // Make sure nodes stay at least nodeSize distance from the edges
-  node.x = Math.max(nodeSize, Math.min(width - nodeSize, node.x || width/2));
-  node.y = Math.max(nodeSize, Math.min(height - nodeSize, node.y || height/2));
-});
-  
-  // Process links, ensuring they reference valid nodes
-  const processedLinks = linksData
-    .filter(link => {
-      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-      return nodeMap.has(sourceId) && nodeMap.has(targetId);
-    })
-    .map(link => ({
-      ...link,
-      source: typeof link.source === 'string' ? link.source : link.source.id,
-      target: typeof link.target === 'string' ? link.target : link.target.id
-    }));
-  
-  console.log(`Valid links after processing: ${processedLinks.length}`);
-  
-
-  // Define zoom behavior
-  const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
-    .scaleExtent([0.5, 2])
-    .translateExtent([[0, 0], [width, height]]) // Constrain panning to container size
-    .extent([[0, 0], [width, height]])
-    .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
-      g.attr('transform', event.transform.toString());
+    // Create map of nodeId to node for faster lookup
+    const nodeMap = new Map<string, NodeData>();
+    nodesData.forEach((node, i) => {
+      // Get the node size (or default)
+      const nodeSize = node.size || 25;
+      
+      if (node.x === undefined || node.y === undefined) {
+        // Position nodes in a circle formation centered in the visible area
+        const angle = (i * (2 * Math.PI)) / nodesData.length;
+        const radius = Math.min(width, height) * 0.3 + nodeSize * 0.5;
+        
+        // Center at width/2, height/2 to place in middle of container
+        node.x = (width / 2) + Math.cos(angle) * radius;
+        node.y = (height / 2) + Math.sin(angle) * radius;
+      }
+      
+      // Add node to the map
+      nodeMap.set(node.id, node);
     });
-  zoomRef.current = zoomBehaviorInstance;
-  svgSelection.call(zoomBehaviorInstance);
-  
-  // Apply initial transform to the zoom behavior
-  zoomBehaviorInstance.transform(svgSelection, initialTransform);
-  
-  // Make sure each node has a position if x,y are not defined
-  nodesData.forEach((node, i) => {
-    if (node.x === undefined) {
-      // Position nodes in a circle if no position is defined
-      const angle = (i * (2 * Math.PI)) / nodesData.length;
-      const radius = Math.min(width, height) * 0.3;
-      node.x = Math.cos(angle) * radius;
-      node.y = Math.sin(angle) * radius;
-    }
-  });
 
+    // Define zoom behavior
+    const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 3]) // Allow more zoom range (out to 0.2x, in to 3x)
+      .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
+        g.attr('transform', event.transform.toString());
+      });
+
+    zoomRef.current = zoomBehaviorInstance;
+
+    // Apply the zoom behavior to the SVG
+    svgSelection.call(zoomBehaviorInstance)
+      // Prevent default scrolling behavior when inside the SVG
+      .on("wheel", (event) => {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+        }
+      });
+
+    // Set initial transform - centered in the middle with a slight zoom
+    const initialTransform = zoomIdentity
+      .translate(width / 2, height / 2)
+      .scale(0.8);  // Start slightly zoomed out to show context
+
+    // Apply the initial transform
+    zoomBehaviorInstance.transform(svgSelection, initialTransform);
+    
     const defs = svgSelection.append("defs");
 
     // Glow filters
@@ -210,32 +312,42 @@ const NodeMap: React.FC<NodeMapProps> = ({
       feMerge.append("feMergeNode").attr("in", "SourceGraphic");
     });
 
-    // Declare nodeElements and linkElements here before use
-    let nodeElements: D3NodeSelection;
-    let linkElements: D3LinkSelection;
+    // Helper function to calculate appropriate node size based on container dimensions
+    const calculateNodeSize = () => {
+      // Scale node size based on container size
+      const minDimension = Math.min(width, height);
+      const baseSize = minDimension / 15; // Size relative to container
+      return Math.max(20, Math.min(40, baseSize)); // Min 20px, max 40px
+    };
 
-// In NodeMap.tsx - Helper function to calculate appropriate node size based on container dimensions
-const calculateNodeSize = () => {
-  // Scale node size based on container size
-  const minDimension = Math.min(width, height);
-  const baseSize = minDimension / 15; // Size relative to container
-  return Math.max(20, Math.min(40, baseSize)); // Min 20px, max 40px
-};
+    // Use this function when rendering nodes
+    const nodeSize = calculateNodeSize();
 
-// Use this function when rendering nodes
-const nodeSize = calculateNodeSize();
-
-    // Prepare links for the simulation
-    const linksForSimulation: LinkData[] = linksData
+    // Process links, ensuring they reference valid nodes
+    const processedLinks = linksData
+      .filter(link => {
+        const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+        const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+        return nodeMap.has(sourceId) && nodeMap.has(targetId);
+      })
       .map(link => ({
         ...link,
-        source: typeof link.source === 'string' ? link.source : link.source.id,
-        target: typeof link.target === 'string' ? link.target : link.target.id,
-      }))
-      .filter(link => nodeMap.has(link.source as string) && nodeMap.has(link.target as string));
+        source: typeof link.source === 'string' ? link.source : (link.source as NodeData).id,
+        target: typeof link.target === 'string' ? link.target : (link.target as NodeData).id
+      }));
+    
+    console.log(`Valid links after processing: ${processedLinks.length}`);
 
-    const linksGroup = g.append('g').attr('class', 'links');
+    // Prepare links for the simulation
+    const linksForSimulation: LinkData[] = processedLinks
+      .map(link => ({
+        ...link,
+        source: typeof link.source === 'string' ? link.source : (link.source as NodeData).id,
+        target: typeof link.target === 'string' ? link.target : (link.target as NodeData).id,
+      }));
+
     // Create gradients for links
+    const linksGroup = g.append('g').attr('class', 'links');
     linksForSimulation.forEach((link, i) => {
       const gradientId = `link-gradient-${i}`;
       const gradient = defs.append("linearGradient")
@@ -252,14 +364,7 @@ const nodeSize = calculateNodeSize();
       gradient.append("stop").attr("offset", "100%").attr("stop-color", targetColor);
     });
 
-console.log('Links data check:', processedLinks.map(l => ({
-  sourceId: l.source,
-  targetId: l.target,
-  sourceExists: nodeMap.has(l.source as string),
-  targetExists: nodeMap.has(l.target as string)
-})));
-    
-    linkElements = linksGroup.selectAll('line')
+    const linkElements = linksGroup.selectAll('line')
       .data(linksForSimulation as unknown as CustomSimulationLink[])
       .enter()
       .append('line')
@@ -278,7 +383,7 @@ console.log('Links data check:', processedLinks.map(l => ({
       .style('stroke-dashoffset', 0);
 
     const nodesGroup = g.append('g').attr('class', 'nodes');
-    nodeElements = nodesGroup.selectAll('g')
+    const nodeElements = nodesGroup.selectAll('g')
       .data(nodesData)
       .enter()
       .append('g')
@@ -358,121 +463,98 @@ console.log('Links data check:', processedLinks.map(l => ({
     // Add pulsing animation for highlighted node
     if (highlightedNodeId) {
       nodeElements
-      .filter((d: NodeData) => d.id === highlightedNodeId)
-      .select<SVGCircleElement>('.node-main-circle')
-      .call((selection: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
-        const pulse = (sel: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
-          sel
-            .transition()
-            .duration(1000)
-            .attr('r', (d: NodeData) => (d.size || 15) * 1.2)
-            .transition()
-            .duration(1000)
-            .attr('r', (d: NodeData) => d.size || 15)
-            .on('end', () => pulse(sel));
-        };
-        pulse(selection);
-      });
+        .filter((d: NodeData) => d.id === highlightedNodeId)
+        .select<SVGCircleElement>('.node-main-circle')
+        .call((selection: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
+          const pulse = (sel: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
+            sel
+              .transition()
+              .duration(1000)
+              .attr('r', (d: NodeData) => (d.size || nodeSize) * 1.2)
+              .transition()
+              .duration(1000)
+              .attr('r', (d: NodeData) => d.size || nodeSize)
+              .on('end', () => pulse(sel));
+          };
+          pulse(selection);
+        });
     }
 
     // Add node labels
     nodeElements.append('text')
       .text((d: NodeData) => d.label || d.id)
       .attr('x', 0)
-      .attr('y', (d: NodeData) => (d.size || 35) + 15)
+      .attr('y', (d: NodeData) => (d.size || nodeSize) + 15)
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
       .style('fill', 'rgba(255, 255, 255, 0.9)')
       .style('pointer-events', 'none')
       .style('text-shadow', '0px 0px 3px rgba(0, 0, 0, 0.7)');
 
-    // Zoom to highlighted node
-    if (zoomToNode) {
-      const targetNode = nodesData.find(node => node.id === zoomToNode);
-      if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined && zoomRef.current) {
-        // Calculate transformations to center on the node
-        const tx = width / 2 - targetNode.x;
-        const ty = height / 2 - targetNode.y;
-        const scale = 1.5; // Slightly larger zoom level
-    
-        // Apply the transformation with a smooth transition
-        zoomRef.current.transform(
-          svgSelection.transition().duration(750) as Transition<SVGSVGElement, unknown, null, undefined>,
-          zoomIdentity.translate(tx, ty).scale(scale)
-        );
-      }
-    }
+    // Improved simulation with better forces
+    const linkForce: ForceLink<NodeData, CustomSimulationLink> = forceLink<NodeData, CustomSimulationLink>(linksForSimulation as CustomSimulationLink[])
+      .id((d: NodeData) => d.id)
+      .distance(100)
+      .strength(0.5); // Increased link strength
 
-    // Add animation for the transition when enableZoomAnimation is true
-    if (zoomToNode && enableZoomAnimation && nodeElementsRef.current && linkElementsRef.current) {
-      const targetNode = nodesData.find(node => node.id === zoomToNode);
-      if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined) {
-        const node = nodeElementsRef.current
-          .filter((d: NodeData) => d.id === zoomToNode)
-          .select('.node-main-circle');
+    const simulationInstance: Simulation<NodeData, CustomSimulationLink> = forceSimulation(nodesData)
+      .force('link', linkForce)
+      .force('charge', forceManyBody()
+        .strength(-300)
+        .distanceMax(500)) // Limit the distance over which the charge force acts
+      .force('center', forceCenter(width / 2, height / 2).strength(0.1))
+      .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 25) + 15))
+      .force('x', forceX(width / 2).strength(0.03)) // Decreased strength
+      .force('y', forceY(height / 2).strength(0.03)); // Decreased strength
+
+    simulationRef.current = simulationInstance;
+
+    // Run simulation with a gentle cooldown
+    simulationInstance.alpha(0.8).restart();
+
+    // Add a tick event handler with softer constraints
+    simulationInstance.on('tick', () => {
+      // Apply very soft constraints or no constraints at all
+      nodeElements.each((d: NodeData) => {
+        // Apply gentle force to keep nodes from flying too far
+        if (d.x !== undefined && d.y !== undefined) {
+          const boundaryForce = 0.01; // Very gentle force
           
-        node.transition()
-          .duration(800)
-          .attr('r', Math.min(width, height) / 2);
-          
-        // Fade out other nodes
-        nodeElementsRef.current
-          .filter((d: NodeData) => d.id !== zoomToNode)
-          .transition()
-          .duration(400)
-          .style('opacity', 0);
-          
-        // Fade out links
-        linkElementsRef.current
-          .transition()
-          .duration(400)
-          .style('opacity', 0);
-      }
-    }
+          // Apply gentle force to keep nodes from flying too far
+          if (d.x < -width) d.x += boundaryForce * (-width - d.x);
+          if (d.x > width * 2) d.x -= boundaryForce * (d.x - width * 2);
+          if (d.y < -height) d.y += boundaryForce * (-height - d.y);
+          if (d.y > height * 2) d.y -= boundaryForce * (d.y - height * 2);
+        }
+      });
+      
+      // Update link positions
+      linkElements
+        .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
+        .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
+        .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
+        .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
 
-   // Replace your current simulation code with this:
-const linkForce: ForceLink<NodeData, CustomSimulationLink> = forceLink<NodeData, CustomSimulationLink>(linksForSimulation as CustomSimulationLink[])
-  .id((d: NodeData) => d.id)
-  .distance(100);
+      // Update node positions
+      nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
+    });
 
-const simulationInstance: Simulation<NodeData, CustomSimulationLink> = forceSimulation(nodesData)
-  .force('link', linkForce)
-  .force('charge', forceManyBody().strength(-300))
-  .force('center', forceCenter(width / 2, height / 2).strength(0.2)) // Increased strength
-  .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 25) + 20))
-  .force('x', forceX(width / 2).strength(0.1)) // Increased strength
-  .force('y', forceY(height / 2).strength(0.1)); // Increased strength
+    // Call zoomToFit and save positions after the simulation has stabilized
+    simulationInstance.on('end', () => {
+      console.log('Simulation ended. Saving node positions.');
+      // Extract final positions
+      const finalNodePositions = nodesData.map(node => ({
+        id: node.id,
+        x: node.x ?? 0, // Use 0 if undefined (shouldn't happen after simulation)
+        y: node.y ?? 0,
+      }));
 
-simulationRef.current = simulationInstance;
+      // Dispatch action to update context state
+      dispatch({ type: 'UPDATE_NODE_POSITIONS', nodes: finalNodePositions });
 
-// Run initial simulation ticks
-simulationInstance.alpha(1).restart();
-simulationInstance.tick(200);
-
-// Add a tick event handler that constrains nodes to visible area
-simulationInstance.on('tick', () => {
-  // Constrain nodes to visible area
-  nodeElements.each((d: NodeData) => {
-    // Get the size of this node (or default)
-    const nodeSize = d.size || 25;
-    
-    // Constrain x position within visible area
-    d.x = Math.max(nodeSize, Math.min(width - nodeSize, d.x || width/2));
-    
-    // Constrain y position within visible area
-    d.y = Math.max(nodeSize, Math.min(height - nodeSize, d.y || height/2));
-  });
-  
-  // Update link positions
-  linkElements
-    .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
-    .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
-    .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
-    .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
-
-  // Update node positions
-  nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
-});
+      // Now zoom to fit
+      zoomToFit(750, 0.8);
+    });
 
     // Tooltip
     const tooltip = g.append('g')
@@ -502,8 +584,8 @@ simulationInstance.on('tick', () => {
       .append('circle')
       .attr('class', 'visit-indicator')
       .attr('r', 5)
-      .attr('cx', (d: NodeData) => (d.size || 35) * 0.6)
-      .attr('cy', (d: NodeData) => -(d.size || 35) * 0.6)
+      .attr('cx', (d: NodeData) => (d.size || nodeSize) * 0.6)
+      .attr('cy', (d: NodeData) => -(d.size || nodeSize) * 0.6)
       .style('fill', '#ffcc00')
       .style('stroke', '#fff')
       .style('stroke-width', 1);
@@ -512,8 +594,8 @@ simulationInstance.on('tick', () => {
       .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
       .append('text')
       .attr('class', 'visit-count')
-      .attr('x', (d: NodeData) => (d.size || 35) * 0.6)
-      .attr('y', (d: NodeData) => -(d.size || 35) * 0.6 + 4)
+      .attr('x', (d: NodeData) => (d.size || nodeSize) * 0.6)
+      .attr('y', (d: NodeData) => -(d.size || nodeSize) * 0.6 + 4)
       .attr('text-anchor', 'middle')
       .style('font-size', '8px')
       .style('fill', '#000')
@@ -527,7 +609,7 @@ simulationInstance.on('tick', () => {
         currentSelection.select<SVGCircleElement>('circle:not(.visit-indicator)')
           .transition()
           .duration(300)
-          .attr('r', (d.size || 15) * 1.2)
+          .attr('r', (d.size || nodeSize) * 1.2)
           .style('stroke-width', 2.5)
           .style('stroke', '#fff');
 
@@ -576,24 +658,38 @@ simulationInstance.on('tick', () => {
           .style('opacity', 0);
       });
 
+    // Add animation for the transition when enableZoomAnimation is true
+    if (zoomToNode && enableZoomAnimation && nodeElementsRef.current && linkElementsRef.current) {
+      // Calculate the maximum radius needed to cover the screen
+      const maxRadius = Math.max(width, height);
+      
+      // Call our animation helper function
+      animateNodeExpansion(zoomToNode, nodeElementsRef.current, linkElementsRef.current, maxRadius);
+    }
+
     return () => {
       if (simulationRef.current) {
         simulationRef.current.stop();
         simulationRef.current = null;
       }
     };
-  }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation]);
+  }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation, animateNodeExpansion, zoomToFit]);
 
-    return (
+  return (
     <div className="node-map-container" style={{ 
       width: '100%', 
       height: '100%',
-      overflow: 'hidden',
+      overflow: 'visible', // Changed from 'hidden' to 'visible'
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      position: 'relative'
     }}>
-      <svg ref={svgRef} style={{ width: '100%', height: '100%' }}></svg>
+      <svg ref={svgRef} style={{ 
+        width: '100%', 
+        height: '100%',
+        overflow: 'visible' // Allow SVG to extend beyond its boundaries
+      }}></svg>
     </div>
   );
 };
