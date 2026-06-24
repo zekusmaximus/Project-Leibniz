@@ -39,7 +39,9 @@ sub-projects:
 │       └── services/               # API client, persistence, story-logic helpers
 └── server/            # backend (own package.json, own package-lock.json)
     ├── index.js               # Express app entry, Mongo connection, route mounting
-    ├── .env                   # ⚠️ committed with real credentials — see "Security notes"
+    ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
+    ├── .env.example           # template to copy to .env
+    ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
     ├── models/                # Mongoose schemas: StoryNode, StoryLink, UserProgress
     └── routes/api/            # REST routers: storyNodes, storyLinks, userProgress
 ```
@@ -54,8 +56,8 @@ own directory.
 cd client
 npm install
 npm run dev        # Vite dev server, http://localhost:5173
-npm run build      # tsc (type-check) THEN vite build → client/dist
-npm run lint       # ESLint; configured with --max-warnings 0
+npm run build      # tsc (type-check) THEN vite build → client/dist  ✅ works
+npm run lint       # ⚠️ BROKEN — see "Linting is broken" below
 npm run preview    # serve the production build locally
 ```
 
@@ -105,27 +107,21 @@ Client state lives in a **React Context + `useReducer`** store, not Redux.
   **Import `useStory` from here** (`../context/context`), as the pages do.
 - `context/index.ts` — barrel re-exporting `StoryProvider`, `useStory`, types.
 
-### ⚠️ Duplicate / dead code — read before editing the context layer
+### Single source of truth (after dead-code cleanup)
 
-This directory accumulated several parallel copies during iteration. Be careful
-to edit the *live* files listed above, not the dead ones:
+The context layer previously had three parallel copies of the store/initial
+data left over from iteration. These have been removed so the live files above
+are the only ones:
 
-- **`context/StoryContext.tsx`** — a fully self-contained LEGACY implementation
-  with its *own* reducer, its *own* initial state, and its *own* context. It is
-  **not** the provider the app uses (`App.tsx` uses `StoryProvider.tsx`).
-  However it is **still imported for its exported types** by
-  `services/ApiService.ts` and `services/SaveLoadService.ts`
-  (`import { StoryState, ... } from '../context/StoryContext'`). So you can't
-  simply delete it without redirecting those imports to `StoryTypes.ts` first.
-- **`context/StoryInitialState.ts`** — an unused third copy of the initial story
-  data. Not imported anywhere meaningful. The live copy is `InitialState.ts`.
-- **`context/useStory.ts`** — a duplicate `useStory` hook (plus a no-op dummy
-  component). The live hook lives in `context.ts`; prefer that one.
+- Deleted `context/StoryContext.tsx` (legacy self-contained store) — its type
+  consumers (`services/ApiService.ts`, `services/SaveLoadService.ts`) now import
+  from `StoryTypes.ts`.
+- Deleted `context/StoryInitialState.ts` (unused duplicate of `InitialState.ts`).
+- Deleted `context/useStory.ts` (duplicate hook; the live one is in `context.ts`).
 
-When you change the story graph, node shape, or state logic, update the **live**
-files and keep `StoryTypes.ts` as the single source of truth for types. If you
-touch the data model, search for the duplicates so the app and its dead twins
-don't drift further apart.
+When you change the story graph, node shape, or state logic, update the live
+files and keep `StoryTypes.ts` as the single source of truth for types. Don't
+reintroduce parallel copies of the reducer or initial state.
 
 ### Reducer behaviour worth knowing
 - `VISIT_NODE` increments `visitCounts[nodeId]`, sets `isRevealed`, recolors a
@@ -186,17 +182,25 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
 - **Two package trees.** Run `npm install` in `client/` and `server/`
   separately. The root `package.json` is empty — don't add scripts expecting a
   monorepo runner.
-- **Lint is strict:** `npm run lint` runs with `--max-warnings 0`, and the
-  TS config enables `noUnusedLocals`/`noUnusedParameters` + `strict`. Keep new
-  client code warning-clean or `build` (which runs `tsc` first) will fail.
+- **Type-check is the real gate.** `npm run build` runs `tsc` (strict, with
+  `noUnusedLocals`/`noUnusedParameters`) before `vite build`, so keep new client
+  code warning-clean or the build fails. `tsc && vite build` currently passes.
+- **Linting is broken (pre-existing).** `npm run lint` fails for two unrelated,
+  pre-existing reasons: (1) the script passes `--ext ts,tsx`, which is invalid
+  under the flat `eslint.config.js`; and (2) the installed ESLint is `8.57`
+  (per `package.json`'s `^8.45.0` + old `@typescript-eslint/*` deps), but
+  `eslint.config.js` is ESLint-9 flat-config style importing `typescript-eslint`,
+  `@eslint/js`, and `globals` — packages not in `devDependencies`. Fixing it
+  means choosing one ESLint era and aligning deps + config + script; until then,
+  rely on `tsc` for static checking. (Not yet fixed — out of scope of the cleanup
+  that produced this doc.)
 - **Heavy `console.log` usage.** The reducer, provider, and pages log verbosely
   (debugging aids left in). Match the surrounding style if extending, but
   consider not adding more noise.
-- **Fast Refresh workaround pattern.** Several context files export a dummy
+- **Fast Refresh workaround pattern.** A couple of context files export a dummy
   no-op default React component purely to satisfy
-  `react-refresh/only-export-components`. That's why files like
-  `StoryContextDefinition.ts`/`useStory.ts` contain an unused component — it's
-  intentional, not a mistake.
+  `react-refresh/only-export-components`. That's why `StoryContextDefinition.ts`
+  contains an unused component — it's intentional, not a mistake.
 - **No tests exist** anywhere (client or server). There is no test runner
   configured; the server `test` script deliberately exits 1.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
@@ -205,12 +209,13 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
 
 ## Security notes (please surface, don't propagate)
 
-- **`server/.env` is committed to the repo with a live MongoDB Atlas
-  connection string and password**, even though `.gitignore` lists `.env`. This
-  is a real secret leak. Do **not** copy these credentials into code, commits,
-  PRs, or chat. If working on backend config, recommend rotating the credential
-  and removing `server/.env` from version control (`git rm --cached
-  server/.env`). Do not "fix" it by pasting the value elsewhere.
+- **`server/.env` previously contained a live MongoDB Atlas connection string
+  and password and was committed to the repo.** It has now been removed from
+  tracking (`git rm --cached server/.env`) and is git-ignored via the new
+  `server/.gitignore`; copy `server/.env.example` to `server/.env` and fill in
+  real values locally. **The credential is still present in git history**, so it
+  must be treated as compromised: rotate the MongoDB password in Atlas. Do **not**
+  copy the old value into code, commits, PRs, or chat.
 - CORS is enabled with no allow-list (`app.use(cors())`), acceptable for local
   dev but not for production as-is.
 
