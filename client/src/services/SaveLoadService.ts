@@ -1,5 +1,5 @@
 // client/src/services/SaveLoadService.ts
-import { StoryState } from '../context/StoryContext';
+import { StoryState } from '../context/StoryTypes';
 
 export class SaveLoadService {
   private readonly STORAGE_KEY = 'project-leibniz-save';

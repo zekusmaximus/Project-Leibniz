@@ -23,6 +23,16 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Allow intentionally-unused identifiers when prefixed with `_`
+      // (e.g. destructured fields kept only for documentation).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   },
 )

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useStory } from '../context/context';
 import NodeMap from '../components/NodeMap';
 import { NodeData } from '../components/NodeMap';
+import SaveLoadControls from '../services/SaveLoadControls';
 import { useRef, useState, useEffect } from 'react';
 
 const HomePage = () => {
@@ -105,6 +106,7 @@ console.log(`HomePage has ${d3Nodes.length} nodes and ${d3Links.length} links to
         textAlign: 'center'
       }}>
         <h1 className="title">Eternal Return of the Digital Self</h1>
+        <SaveLoadControls className="home-save-load" />
       </div>
       
       <div 

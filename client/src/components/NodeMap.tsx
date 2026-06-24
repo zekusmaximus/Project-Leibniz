@@ -673,6 +673,9 @@ const NodeMap: React.FC<NodeMapProps> = ({
         simulationRef.current = null;
       }
     };
+    // Effect intentionally omits the stable `dispatch` from useStory; including
+    // it would not change behaviour and only churns the simulation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation, animateNodeExpansion, zoomToFit]);
 
   return (

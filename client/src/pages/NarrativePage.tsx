@@ -82,6 +82,9 @@ const NarrativePage = () => {
       // Set background color based on node
       setBackgroundColor(currentNode.color || '#1e232d');
     }
+    // Reveal logic should run on node/graph changes only; re-running on every
+    // visitCounts change would re-trigger reveals on each visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId, state.nodes, state.links, visitNode, revealNode, revealLink]);
   
   // Get current node text
