@@ -6,7 +6,8 @@
 // The server nests presentation under `visualProperties` and authoring metadata
 // under `metadata`; the client keeps a flatter, render-friendly shape. Keep all
 // of that shape-knowledge here so the rest of the app never sees the raw API DTOs.
-import { StoryNode, StoryLink, StoryState } from '../context/StoryTypes';
+import { StoryNode, StoryLink, StoryState, StoryChoice } from '../context/StoryTypes';
+import { compileConditionFromString } from './conditionDSL';
 
 /** Node document as returned by `GET /api/nodes`. */
 export interface ServerNode {
@@ -43,11 +44,17 @@ export function mapServerNode(doc: ServerNode): StoryNode {
     id: doc.id,
     label: doc.label ?? doc.id,
     text: doc.text ?? '',
-    // Server stores `condition` as a string; the client expects a predicate
-    // function. We can't safely eval arbitrary strings, so conditions are
-    // dropped here (all choices treated as unconditional) until a proper
-    // condition compiler exists.
-    choices: (doc.choices ?? []).map((c) => ({ targetId: c.targetId, text: c.text })),
+    // Server stores `condition` as a serialized ConditionSpec string. We
+    // compile it back into a predicate with the shared condition DSL (the same
+    // compiler InitialState.ts uses), so conditions survive the round-trip
+    // through the backend. Missing/malformed strings yield an unconditional
+    // choice.
+    choices: (doc.choices ?? []).map((c): StoryChoice => {
+      const condition = c.condition ? compileConditionFromString(c.condition) : undefined;
+      return condition
+        ? { targetId: c.targetId, text: c.text, condition }
+        : { targetId: c.targetId, text: c.text };
+    }),
     x: doc.visualProperties?.x,
     y: doc.visualProperties?.y,
     color: doc.visualProperties?.color,
