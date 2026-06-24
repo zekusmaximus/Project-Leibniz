@@ -8,46 +8,59 @@ interface SaveLoadControlsProps {
 }
 
 const SaveLoadControls: React.FC<SaveLoadControlsProps> = ({ className = '' }) => {
-  const { state, loadStory, resetStory } = useStory();
+  const { state, loadStory, resetStory, saveProgress } = useStory();
   const [saveMessage, setSaveMessage] = useState<string>('');
-  
-  const handleSave = () => {
-    const success = saveLoadService.saveStory(state);
-    setSaveMessage(success ? 'Game saved!' : 'Failed to save game.');
-    
-    // Clear the message after 3 seconds
+  const [isSaving, setIsSaving] = useState(false);
+
+  const flashMessage = (message: string) => {
+    setSaveMessage(message);
     setTimeout(() => setSaveMessage(''), 3000);
   };
-  
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    // Always keep a local snapshot so the game survives offline, then try to
+    // sync the progress to the backend.
+    const localOk = saveLoadService.saveStory(state);
+    const remoteOk = await saveProgress();
+    setIsSaving(false);
+
+    if (remoteOk) {
+      flashMessage('Game saved to your account!');
+    } else if (localOk) {
+      flashMessage('Saved locally (offline).');
+    } else {
+      flashMessage('Failed to save game.');
+    }
+  };
+
   const handleLoad = () => {
     const savedState = saveLoadService.loadStory();
     if (savedState) {
       loadStory(savedState);
-      setSaveMessage('Game loaded!');
+      flashMessage('Game loaded!');
     } else {
-      setSaveMessage('No saved game found.');
+      flashMessage('No saved game found.');
     }
-    
-    // Clear the message after 3 seconds
-    setTimeout(() => setSaveMessage(''), 3000);
   };
-  
+
   const handleReset = () => {
     if (window.confirm('Are you sure you want to reset the story? All progress will be lost.')) {
       resetStory();
-      setSaveMessage('Story reset!');
-      setTimeout(() => setSaveMessage(''), 3000);
+      flashMessage('Story reset!');
     }
   };
-  
+
   return (
     <div className={`save-load-controls ${className}`}>
-      <button onClick={handleSave} className="save-button">Save Story</button>
+      <button onClick={handleSave} className="save-button" disabled={isSaving}>
+        {isSaving ? 'Saving…' : 'Save Story'}
+      </button>
       <button onClick={handleLoad} className="load-button" disabled={!saveLoadService.hasSavedStory()}>
         Load Story
       </button>
       <button onClick={handleReset} className="reset-button">Reset Story</button>
-      
+
       {saveMessage && (
         <div className="save-message">
           {saveMessage}

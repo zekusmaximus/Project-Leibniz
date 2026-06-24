@@ -39,6 +39,7 @@ sub-projects:
 │       └── services/               # API client, persistence, story-logic helpers
 └── server/            # backend (own package.json, own package-lock.json)
     ├── index.js               # Express app entry, Mongo connection, route mounting
+    ├── seed.js                # `npm run seed` — populates the DB with the starter graph
     ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
     ├── .env.example           # template to copy to .env
     ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
@@ -57,7 +58,7 @@ cd client
 npm install
 npm run dev        # Vite dev server, http://localhost:5173
 npm run build      # tsc (type-check) THEN vite build → client/dist  ✅ works
-npm run lint       # ⚠️ BROKEN — see "Linting is broken" below
+npm run lint       # ESLint 9 flat config; --max-warnings 0  ✅ works (clean)
 npm run preview    # serve the production build locally
 ```
 
@@ -67,6 +68,7 @@ cd server
 npm install
 npm run dev        # nodemon index.js (auto-restart)
 npm run start      # node index.js
+npm run seed       # ⚠️ DESTRUCTIVE: clears + reseeds StoryNode/StoryLink with the starter graph
 # Listens on PORT (default 3001). Requires MONGODB_URI in server/.env.
 npm test           # ⚠️ NOT IMPLEMENTED — prints an error and exits 1
 ```
@@ -139,23 +141,37 @@ reintroduce parallel copies of the reducer or initial state.
 - `ApiService.ts` — axios REST client for the backend (`fetchAllNodes`,
   `fetchAllLinks`, `fetchNode`, `saveUserProgress`, `loadUserProgress`, …).
   Base URL from `import.meta.env.VITE_API_URL` (fallback `http://localhost:3001/api`).
-  **Currently instantiated but not imported by any component** — the frontend
-  does not yet load story content from the backend.
+  Also exports `getStoredUserId`/`setStoredUserId` (anonymous user id in
+  localStorage, key `project-leibniz-user-id`). **Wired into `StoryProvider`.**
+- `storyMapper.ts` — translates backend DTOs (`ServerNode`/`ServerLink`, with
+  their nested `visualProperties`/`metadata`) ↔ the flat client `StoryState`.
+  `buildStoryState`, `applyProgress` (reconstructs reveal state from history),
+  and `toProgressPayload` live here. **All shape-knowledge of the API lives in
+  this file** — keep it there.
 - `StoryLogicService.ts` — a priority-ordered rule engine (`evaluateState`) plus
   `getNodeText(nodeId, state)`. Only `getNodeText` is wired in (used by
   `NarrativePage`); `evaluateState`/the rule list is defined but **not called**.
 - `SaveLoadService.ts` — localStorage persistence (key `project-leibniz-save`).
-- `SaveLoadControls.tsx` — Save/Load/Reset UI component. **Defined but not
-  rendered anywhere** yet.
+- `SaveLoadControls.tsx` — Save/Load/Reset UI. **Mounted on `HomePage`.** Save
+  writes both localStorage and the backend (via `saveProgress`).
 
-### Backend is not wired in (current state)
-The running app uses the **hardcoded** graph from `context/InitialState.ts`.
-`ApiService` and the server REST API exist but nothing fetches from them on
-load, and `SaveLoadControls` isn't mounted. Treat the backend + services as
-scaffolding that is built but not yet connected to the UI. If asked to "make the
-story load from the database," the work is: call `ApiService` (e.g. in
-`StoryProvider`/an effect), map server documents → the client `StoryState`
-shape, and `loadStory(...)` the result.
+### Backend integration (wired)
+On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
+`storyMapper.buildStoryState`, restores saved progress for the stored
+`userId` via `/api/progress/:userId` (`applyProgress`), and dispatches
+`LOAD_STORY`. **If the backend is unreachable or returns no nodes, it falls back
+to the bundled `context/InitialState.ts`** so the app still runs offline — so
+"nothing loaded from the API" is a *normal* state in dev when no server/DB is up.
+`saveProgress()` (exposed on the context, used by `SaveLoadControls`) POSTs the
+progress subset (`currentNodeId`/`visitCounts`/`flags`/`history` — the only
+fields the `UserProgress` schema stores) to `/api/progress`.
+
+The context exposes two integration members beyond the helpers:
+`isLoading` (true during the initial fetch) and `saveProgress()`.
+
+**To get real data flowing:** start the server with a reachable `MONGODB_URI`,
+run `npm run seed` once to populate the graph, then run the client. `server/seed.js`
+mirrors `InitialState.ts`; keep the two in sync when you change the starter story.
 
 ## Backend API reference
 
@@ -185,22 +201,25 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
 - **Type-check is the real gate.** `npm run build` runs `tsc` (strict, with
   `noUnusedLocals`/`noUnusedParameters`) before `vite build`, so keep new client
   code warning-clean or the build fails. `tsc && vite build` currently passes.
-- **Linting is broken (pre-existing).** `npm run lint` fails for two unrelated,
-  pre-existing reasons: (1) the script passes `--ext ts,tsx`, which is invalid
-  under the flat `eslint.config.js`; and (2) the installed ESLint is `8.57`
-  (per `package.json`'s `^8.45.0` + old `@typescript-eslint/*` deps), but
-  `eslint.config.js` is ESLint-9 flat-config style importing `typescript-eslint`,
-  `@eslint/js`, and `globals` — packages not in `devDependencies`. Fixing it
-  means choosing one ESLint era and aligning deps + config + script; until then,
-  rely on `tsc` for static checking. (Not yet fixed — out of scope of the cleanup
-  that produced this doc.)
-- **Heavy `console.log` usage.** The reducer, provider, and pages log verbosely
-  (debugging aids left in). Match the surrounding style if extending, but
-  consider not adding more noise.
-- **Fast Refresh workaround pattern.** A couple of context files export a dummy
-  no-op default React component purely to satisfy
-  `react-refresh/only-export-components`. That's why `StoryContextDefinition.ts`
-  contains an unused component — it's intentional, not a mistake.
+- **Linting works and passes clean.** The toolchain is ESLint 9 flat config:
+  `eslint`, `@eslint/js`, `typescript-eslint`, `globals`, and the react-hooks /
+  react-refresh plugins (v5 / v0.4.16). `npm run lint` runs with
+  `--max-warnings 0`, so keep new code warning-free. Config notes: unused vars
+  prefixed `_` are ignored (`@typescript-eslint/no-unused-vars` ignore patterns);
+  a few effects in `NodeMap.tsx`/`NarrativePage.tsx` carry intentional
+  `// eslint-disable-next-line react-hooks/exhaustive-deps` with a reason — don't
+  remove them blindly.
+- **`d3` is loosely typed.** `src/d3.d.ts` declares `module 'd3'` (so namespace
+  `import * as d3` in `MiniMap.tsx` is effectively `any`). Type your d3 callback
+  params explicitly (e.g. `(d: NodeData) => …`) rather than reaching for
+  `@ts-ignore` — the recommended config bans `@ts-ignore`.
+- **Heavy `console.log` usage.** The reducer and pages log verbosely (debugging
+  aids left in). Match the surrounding style if extending, but consider not
+  adding more noise.
+- **Fast Refresh / context files.** Keep React context objects in their own
+  non-component module (`StoryContextDefinition.ts` exports only the context) so
+  `react-refresh/only-export-components` stays happy. Don't co-locate a component
+  export with the context.
 - **No tests exist** anywhere (client or server). There is no test runner
   configured; the server `test` script deliberately exits 1.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and

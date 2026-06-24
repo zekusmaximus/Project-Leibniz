@@ -48,6 +48,9 @@ export interface StoryContextType {
   getVisibleNodes: () => StoryNode[];
   getVisibleLinks: () => StoryLink[];
   dispatch: React.Dispatch<StoryAction>; // Add dispatch function
+  // Backend integration
+  isLoading: boolean;                    // true while the initial story graph is being fetched
+  saveProgress: () => Promise<boolean>;  // persist current progress to the backend
 }
 
 // Define action types
