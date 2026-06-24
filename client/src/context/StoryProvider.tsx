@@ -11,6 +11,15 @@ import { storyReducer } from './StoryReducer';
 import { InitialState } from './InitialState';
 import apiService, { getStoredUserId, setStoredUserId } from '../services/ApiService';
 import { buildStoryState, applyProgress, toProgressPayload } from '../services/storyMapper';
+import storyLogicService from '../services/StoryLogicService';
+
+// Endings and the flag that unlocks each. When the flag flips we reveal the
+// node + its incoming links through the normal reveal mechanics so the map
+// shows the new way through.
+const ENDING_UNLOCKS: { nodeId: string; flag: string }[] = [
+  { nodeId: 'convergence', flag: 'convergenceUnlocked' },
+  { nodeId: 'singularity', flag: 'secretPathDiscovered' },
+];
 
 // Create context provider
 const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -22,6 +31,11 @@ const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // InitialState the reducer already holds, so the app still works offline.
   useEffect(() => {
     let cancelled = false;
+
+    // The rule engine is a singleton with mutable `executed` state that survives
+    // remounts (incl. StrictMode's double-mount). Re-arm it for a clean run so
+    // once-rules can fire against whatever graph/progress we load below.
+    storyLogicService.reset();
 
     async function init() {
       try {
@@ -68,6 +82,41 @@ const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     };
   }, []);
 
+  // Run the rule engine after every state-changing navigation. We depend on
+  // `history`/`visitCounts` (the things rule triggers read) — NOT on `flags`,
+  // so applying the resulting flags below can't re-trigger this effect into a
+  // loop. Each flag is applied PER KEY and only when it actually changes, which
+  // also makes StrictMode's double-invoke a harmless no-op.
+  useEffect(() => {
+    const changes = storyLogicService.evaluateState(state);
+    const nextFlags = { ...state.flags, ...(changes.flags ?? {}) };
+
+    if (changes.flags) {
+      for (const [key, value] of Object.entries(changes.flags)) {
+        if (state.flags[key] !== value) {
+          dispatch({ type: 'SET_FLAG', key, value });
+        }
+      }
+    }
+
+    // Reveal any ending whose unlock flag is now set, using the normal reveal
+    // actions. Guarded by `isRevealed`, so this won't dispatch repeatedly.
+    for (const { nodeId, flag } of ENDING_UNLOCKS) {
+      if (!nextFlags[flag]) continue;
+      const node = state.nodes[nodeId];
+      if (node && !node.isRevealed) {
+        dispatch({ type: 'REVEAL_NODE', nodeId, nodeData: { isRevealed: true } });
+      }
+      state.links.forEach((link) => {
+        if (link.target === nodeId && !link.isRevealed) {
+          dispatch({ type: 'REVEAL_LINK', link: { ...link, isRevealed: true } });
+        }
+      });
+    }
+    // Triggers read history/visitCounts; re-running on flag changes would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.history, state.visitCounts]);
+
   const visitNode = (nodeId: string) => {
     dispatch({ type: 'VISIT_NODE', nodeId });
   };
@@ -85,6 +134,10 @@ const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   const resetStory = () => {
+    // RESET_STORY is a pure reducer action and can't clear the rule engine's
+    // mutable once/executed state — do that here, or a replay would silently
+    // skip already-fired once-rules.
+    storyLogicService.reset();
     dispatch({ type: 'RESET_STORY' });
   };
 

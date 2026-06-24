@@ -9,7 +9,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 const NarrativePage = () => {
   const { nodeId } = useParams<{ nodeId: string }>();
   const navigate = useNavigate();
-  const { state, visitNode, revealNode, revealLink, getVisibleNodes, getVisibleLinks, getCurrentNode } = useStory();
+  const { state, visitNode, revealNode, revealLink, getVisibleNodes, getVisibleLinks, getCurrentNode, resetStory } = useStory();
   const [backgroundColor, setBackgroundColor] = useState('#1e232d');
   
   // Add this ref for the mini map zoom function
@@ -143,10 +143,21 @@ const NarrativePage = () => {
     navigate('/');
   };
 
-  // Filter choices based on conditions if present
-  const nodeChoices = getCurrentNode()?.choices?.filter(
-    choice => !choice.condition || choice.condition(state)
-  );
+  // Whether this node is a terminal ending. Endings hide all further choices
+  // and offer a restart instead.
+  const isEnding = nodeId ? storyLogicService.isEnding(nodeId) : false;
+
+  // Filter choices based on conditions if present (suppressed entirely at endings).
+  const nodeChoices = isEnding
+    ? []
+    : getCurrentNode()?.choices?.filter(
+        choice => !choice.condition || choice.condition(state)
+      );
+
+  const handleRestart = () => {
+    resetStory();
+    navigate('/');
+  };
 
   return (
     <motion.div 
@@ -166,7 +177,16 @@ const NarrativePage = () => {
         
         <div className="story-text-container">
           <p>{currentNodeText}</p>
-          
+
+          {isEnding && (
+            <div className="story-ending">
+              <p className="ending-label">— An Ending —</p>
+              <button className="choice-button" onClick={handleRestart}>
+                Begin again
+              </button>
+            </div>
+          )}
+
           {nodeChoices && nodeChoices.length > 0 && (
             <div className="story-choices">
               <p>What would you like to do?</p>

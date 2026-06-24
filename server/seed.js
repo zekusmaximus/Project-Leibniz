@@ -13,6 +13,12 @@ const StoryNode = require('./models/StoryNode');
 const StoryLink = require('./models/StoryLink');
 
 // Mirrors the bundled client fallback in client/src/context/InitialState.ts.
+//
+// Choice `condition` values are serialized ConditionSpec objects (see
+// client/src/services/conditionDSL.ts). The client compiles these strings back
+// into predicates in storyMapper.ts, so conditions behave identically whether
+// the graph is served from here or loaded from the offline fallback. Keep these
+// specs in sync with the compiled specs in InitialState.ts.
 const nodes = [
   {
     id: 'start',
@@ -21,6 +27,16 @@ const nodes = [
     choices: [
       { targetId: 'pathA', text: 'Follow the Path of Whispers' },
       { targetId: 'pathB', text: 'Follow the Path of Echoes' },
+      {
+        targetId: 'convergence',
+        text: 'Surrender to the eternal return',
+        condition: JSON.stringify({ kind: 'flag', key: 'convergenceUnlocked' }),
+      },
+      {
+        targetId: 'singularity',
+        text: 'Step into the tear between whisper and echo',
+        condition: JSON.stringify({ kind: 'flag', key: 'secretPathDiscovered' }),
+      },
     ],
     visualProperties: { color: 'orange', size: 20 },
     metadata: { isStartNode: true },
@@ -51,7 +67,14 @@ const nodes = [
     id: 'whisperSource',
     label: 'Source of Whispers',
     text: 'You find the source of the whispers - a small, pulsating crystal that seems to speak directly to your mind.',
-    choices: [{ targetId: 'pathA', text: 'Go back to the corridor' }],
+    choices: [
+      { targetId: 'pathA', text: 'Go back to the corridor' },
+      {
+        targetId: 'echoChamber',
+        text: 'Follow the resonance toward the echoes',
+        condition: JSON.stringify({ kind: 'visited', node: 'echoChamber' }),
+      },
+    ],
     visualProperties: { color: '#ADD8E6', size: 12 },
     metadata: { isStartNode: false },
   },
@@ -59,8 +82,31 @@ const nodes = [
     id: 'echoChamber',
     label: 'Echo Chamber',
     text: 'The echoes grow louder in this chamber. You see shadowy figures moving just at the edge of your vision.',
-    choices: [{ targetId: 'pathB', text: 'Retreat from the chamber' }],
+    choices: [
+      { targetId: 'pathB', text: 'Retreat from the chamber' },
+      {
+        targetId: 'whisperSource',
+        text: 'Cross the resonance toward the whispers',
+        condition: JSON.stringify({ kind: 'visited', node: 'whisperSource' }),
+      },
+    ],
     visualProperties: { color: '#90EE90', size: 12 },
+    metadata: { isStartNode: false },
+  },
+  {
+    id: 'convergence',
+    label: 'The Eternal Return',
+    text: 'The braided thread accepts you.', // Rendered adaptively on the client.
+    choices: [],
+    visualProperties: { color: '#6a0dad', size: 18 },
+    metadata: { isStartNode: false },
+  },
+  {
+    id: 'singularity',
+    label: 'The Singularity',
+    text: 'You step into the tear where echo became whisper.',
+    choices: [],
+    visualProperties: { color: '#111111', size: 16 },
     metadata: { isStartNode: false },
   },
 ];
@@ -74,6 +120,10 @@ const links = [
   { source: 'echoChamber', target: 'pathB', visualProperties: { color: 'lightgreen' } },
   { source: 'pathA', target: 'start', visualProperties: { color: '#777' } },
   { source: 'pathB', target: 'start', visualProperties: { color: '#777' } },
+  { source: 'whisperSource', target: 'echoChamber', visualProperties: { color: '#6a0dad' } },
+  { source: 'echoChamber', target: 'whisperSource', visualProperties: { color: '#6a0dad' } },
+  { source: 'start', target: 'convergence', visualProperties: { color: '#6a0dad' } },
+  { source: 'start', target: 'singularity', visualProperties: { color: '#444' } },
 ];
 
 async function seed() {
