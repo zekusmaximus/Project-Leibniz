@@ -22,6 +22,7 @@ const ENDING_UNLOCKS: { nodeId: string; flag: string }[] = [
   { nodeId: 'chorus', flag: 'chorusUnlocked' },
   { nodeId: 'descent', flag: 'descentDiscovered' },
   { nodeId: 'emergence', flag: 'emergenceDiscovered' },
+  { nodeId: 'persistence', flag: 'persistenceDiscovered' },
 ];
 
 // Create context provider

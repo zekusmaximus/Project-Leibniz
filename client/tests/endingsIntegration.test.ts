@@ -46,6 +46,16 @@ describe('order-based endings fire through the real engine', () => {
     expect(s.flags.descentDiscovered).toBeFalsy();
   });
 
+  it('persistence fires for whisper → silence → echo ending the history', () => {
+    const s = play([
+      'pathA', 'whisperSource', 'pathB', 'echoChamber', 'pathC', 'silenceSource',
+      'whisperSource', 'silenceSource', 'echoChamber',
+    ]);
+    expect(s.flags.persistenceDiscovered).toBe(true);
+    expect(s.flags.descentDiscovered).toBeFalsy();
+    expect(s.flags.emergenceDiscovered).toBeFalsy();
+  });
+
   it('seeing only two sources does NOT unlock chorus', () => {
     const s = play(['pathA', 'whisperSource', 'pathB', 'echoChamber']);
     expect(s.flags.chorusUnlocked).toBeFalsy();

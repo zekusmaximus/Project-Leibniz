@@ -113,14 +113,14 @@ Client state lives in a **React Context + `useReducer`** store, not Redux.
 - `context/InitialState.ts` — the bundled offline-fallback story graph. It no
   longer hardcodes anything: it imports the canonical `data/storyGraph.json` and
   runs it through `storyMapper.buildStoryState`. **The graph content lives in
-  `client/src/data/storyGraph.json`** (14 nodes): three paths from `start` —
+  `client/src/data/storyGraph.json`** (15 nodes): three paths from `start` —
   whispers (`pathA`→`whisperSource`→`whisperDepths`), echoes
   (`pathB`→`echoChamber`→`echoDepths`), and silence (`pathC`→`silenceSource`, the
-  Null) — woven together by source↔source resonance shortcuts, plus five endings:
+  Null) — woven together by source↔source resonance shortcuts, plus six endings:
   `convergence` (both sources), `singularity` (secret order echo→whisper),
-  `chorus` (all three sources), and the two order-determined endings `descent`
-  (whisper→echo→silence) and `emergence` (silence→echo→whisper). See "The story
-  graph (single source of truth)" below.
+  `chorus` (all three sources), and the three order-determined endings `descent`
+  (whisper→echo→silence), `emergence` (silence→echo→whisper) and `persistence`
+  (whisper→silence→echo). See "The story graph (single source of truth)" below.
 - `data/storyGraph.json` — **the single source of truth for the story graph.**
   Server-DTO shape (conditions serialized as JSON strings), so the offline
   fallback (via `buildStoryState`) and the backend API path produce the identical
