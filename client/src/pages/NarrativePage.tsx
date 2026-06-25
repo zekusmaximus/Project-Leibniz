@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { useStory } from '../context/context';
 import MiniMap from '../components/MiniMap';
 import storyLogicService from '../services/StoryLogicService';
+import { describeCondition } from '../services/conditionDSL';
+import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
 import { useRef, useState, useEffect, useCallback } from 'react';
 
 const NarrativePage = () => {
@@ -11,7 +13,8 @@ const NarrativePage = () => {
   const navigate = useNavigate();
   const { state, visitNode, revealNode, revealLink, getVisibleNodes, getVisibleLinks, getCurrentNode, resetStory } = useStory();
   const [backgroundColor, setBackgroundColor] = useState('#1e232d');
-  
+  const [showAdaptations, setShowAdaptations] = useState(false);
+
   // Add this ref for the mini map zoom function
   const miniMapZoomToFitRef = useRef<(() => void) | null>(null);
   
@@ -90,6 +93,18 @@ const NarrativePage = () => {
     : "";
   const paragraphs = currentNodeText.split(/\n{2,}/).filter((p) => p.trim().length > 0);
 
+  // "Why this text?" — the adaptive fragments currently appended to the base
+  // text, plus a plain-language reason each one fired. This surfaces that the
+  // story is reacting to which nodes were visited and in what order.
+  const activeVariants = nodeId ? storyLogicService.getMatchingVariants(nodeId, state) : [];
+  const resolveLabel = (id: string) => state.nodes[id]?.label ?? id;
+  const snippet = (t: string) => (t.length > 70 ? t.slice(0, 67).trimEnd() + '…' : t);
+
+  // Order-legibility annotations (pure, from mapVisuals) — same as the main map,
+  // so the minimap shows the sequence walked and the trail too.
+  const visitOrder = getVisitOrder(state.history);
+  const trailKeys = getTrailLinkKeys(state.history, state.links);
+
   // Convert story nodes to D3 node format for MiniMap
   const d3Nodes = getVisibleNodes().map(node => ({
     id: node.id,
@@ -98,14 +113,16 @@ const NarrativePage = () => {
     y: node.y,
     color: node.color,
     size: node.size,
-    visitedCount: node.visitedCount
+    visitedCount: node.visitedCount,
+    visitOrder: visitOrder[node.id]
   }));
 
   const d3Links = getVisibleLinks().map(link => ({
     source: link.source,
     target: link.target,
     color: link.color,
-    width: link.width
+    width: link.width,
+    onTrail: trailKeys.has(`${link.source}->${link.target}`)
   }));
 
 
@@ -172,6 +189,32 @@ const NarrativePage = () => {
           {paragraphs.map((para, i) => (
             <p key={i}>{para}</p>
           ))}
+
+          {activeVariants.length > 0 && (
+            <div className="adaptations">
+              <button
+                type="button"
+                className="adaptations-toggle"
+                aria-expanded={showAdaptations}
+                onClick={() => setShowAdaptations((v) => !v)}
+              >
+                {showAdaptations ? 'Hide adaptations' : 'Why this text?'} ({activeVariants.length})
+              </button>
+
+              {showAdaptations && (
+                <ul className="adaptations-list">
+                  {activeVariants.map((variant) => (
+                    <li key={variant.id} className="adaptation-item">
+                      <span className="adaptation-snippet">“{snippet(variant.text)}”</span>
+                      <span className="adaptation-reason">
+                        — because {describeCondition(variant.condition, resolveLabel)}.
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {isEnding && (
             <div className="story-ending">

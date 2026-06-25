@@ -2,9 +2,12 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { select, type Selection } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior, type D3ZoomEvent } from 'd3-zoom';
-import { drag, type DragBehavior, type D3DragEvent } from 'd3-drag';
+import { drag, type D3DragEvent } from 'd3-drag';
 import { useStory } from '../context/context'; // Import useStory
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY, type Simulation, type SimulationLinkDatum, type ForceLink } from 'd3-force';
+import {
+  forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY,
+  type Simulation, type SimulationLinkDatum, type ForceLink, type ForceCenter, type ForceX, type ForceY,
+} from 'd3-force';
 import 'd3-transition';
 import { easeBounce, easeQuadOut } from 'd3-ease';
 
@@ -17,6 +20,10 @@ export interface NodeData {
   color?: string;
   size?: number;
   visitedCount?: number;
+  // Order-legibility annotations, derived in the pages via `mapVisuals`:
+  visitOrder?: number; // 1-based position of this node's first visit, if visited
+  isCurrent?: boolean; // the node the reader is on now
+  isEnding?: boolean; // a terminal ending node
   fx?: number | null;
   fy?: number | null;
   index?: number;
@@ -29,11 +36,13 @@ export interface LinkData {
   target: string | NodeData;
   color?: string;
   width?: number;
+  onTrail?: boolean; // this edge was walked, in this direction — highlight it
 }
 
 interface CustomSimulationLink extends SimulationLinkDatum<NodeData> {
   color?: string;
   width?: number;
+  onTrail?: boolean;
 }
 
 interface NodeMapProps {
@@ -51,6 +60,64 @@ interface NodeMapProps {
 type D3NodeSelection = Selection<SVGGElement, NodeData, SVGGElement, unknown>;
 type D3LinkSelection = Selection<SVGLineElement, CustomSimulationLink, SVGGElement, unknown>;
 
+const idOf = (endpoint: string | NodeData): string =>
+  typeof endpoint === 'string' ? endpoint : endpoint.id;
+
+// Reconcile the persistent simulation nodes with the incoming data, preserving
+// the position/velocity of nodes that already exist so the layout stays put
+// across reveals (this is what makes the map stop "jumping"). New nodes are
+// seeded at a connected, already-placed neighbour — so a reveal grows out from
+// where the reader came from — or the centre as a fallback.
+function syncSimulationNodes(
+  store: Map<string, NodeData>,
+  incoming: NodeData[],
+  links: LinkData[],
+  width: number,
+  height: number
+): NodeData[] {
+  const incomingIds = new Set(incoming.map((n) => n.id));
+  for (const id of [...store.keys()]) {
+    if (!incomingIds.has(id)) store.delete(id);
+  }
+
+  const neighbourPos = (id: string): { x: number; y: number } | null => {
+    for (const link of links) {
+      const s = idOf(link.source);
+      const t = idOf(link.target);
+      const other = s === id ? t : t === id ? s : null;
+      if (other) {
+        const node = store.get(other);
+        if (node && node.x !== undefined && node.y !== undefined) return { x: node.x, y: node.y };
+      }
+    }
+    return null;
+  };
+
+  return incoming.map((incomingNode) => {
+    const existing = store.get(incomingNode.id);
+    if (existing) {
+      // Copy the presentation fields; leave x/y/vx/vy untouched.
+      existing.label = incomingNode.label;
+      existing.color = incomingNode.color;
+      existing.size = incomingNode.size;
+      existing.visitedCount = incomingNode.visitedCount;
+      existing.visitOrder = incomingNode.visitOrder;
+      existing.isCurrent = incomingNode.isCurrent;
+      existing.isEnding = incomingNode.isEnding;
+      existing.iconUrl = incomingNode.iconUrl;
+      return existing;
+    }
+    const fresh: NodeData = { ...incomingNode };
+    if (fresh.x === undefined || fresh.y === undefined) {
+      const seed = neighbourPos(fresh.id) ?? { x: width / 2, y: height / 2 };
+      fresh.x = seed.x + (Math.random() - 0.5) * 30;
+      fresh.y = seed.y + (Math.random() - 0.5) * 30;
+    }
+    store.set(fresh.id, fresh);
+    return fresh;
+  });
+}
+
 const NodeMap: React.FC<NodeMapProps> = ({
   nodesData = [],
   linksData = [],
@@ -65,608 +132,474 @@ const NodeMap: React.FC<NodeMapProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<Simulation<NodeData, CustomSimulationLink> | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  // Refs to store selections for later use in animations
+  // Persistent scaffold: built once, then incrementally joined against on each
+  // data change instead of being torn down and rebuilt.
+  const gRef = useRef<Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const nodeGroupRef = useRef<Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const linkGroupRef = useRef<Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const tooltipRef = useRef<Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const linkForceRef = useRef<ForceLink<NodeData, CustomSimulationLink> | null>(null);
   const nodeElementsRef = useRef<D3NodeSelection | null>(null);
   const linkElementsRef = useRef<D3LinkSelection | null>(null);
-  const { dispatch } = useStory(); // Get dispatch from context
+  // The simulation's own node objects, kept stable across renders so positions
+  // survive. Keyed by node id.
+  const nodesStoreRef = useRef<Map<string, NodeData>>(new Map());
+  // Signature of the last-rendered structure (ids + edges). We reheat the
+  // simulation only when this changes (a reveal) — never on a pure position or
+  // presentation update — which both keeps the map stable and prevents the
+  // settle → UPDATE_NODE_POSITIONS → re-render → reheat feedback loop.
+  const structureSigRef = useRef<string>('');
+  // Latest prop values read by handlers attached once (in the enter selection),
+  // so those handlers never go stale across renders.
+  const onNodeClickRef = useRef<typeof onNodeClick>(onNodeClick);
+  const highlightRef = useRef<string | undefined>(highlightedNodeId);
+  const zoomToFitRef = useRef<(() => void) | null>(null);
 
-  // Function to zoom to fit all nodes in view
-  const zoomToFit = useCallback((
-    duration: number = 750, 
-    paddingPercent: number = 0.85
-  ) => {
-    if (!svgRef.current || !nodesData.length || !zoomRef.current) return;
-    
+  const { dispatch } = useStory();
+
+  onNodeClickRef.current = onNodeClick;
+  highlightRef.current = highlightedNodeId;
+
+  // Per-node visual derivations that read the *latest* highlighted id via ref,
+  // so they're correct whether called from a fresh render or a once-attached
+  // hover handler.
+  const nodeFill = useCallback((d: NodeData): string => {
+    if (d.id === highlightRef.current) return '#ffcc00';
+    if (d.visitedCount && d.visitedCount > 1) return '#6a0dad';
+    return d.color || 'steelblue';
+  }, []);
+  const nodeGlow = useCallback((d: NodeData): string => {
+    if (d.id === highlightRef.current || d.isCurrent) return 'url(#glow-highlighted)';
+    if (d.visitedCount && d.visitedCount > 0) return 'url(#glow-visited)';
+    return 'url(#glow-normal)';
+  }, []);
+  const nodeStroke = useCallback((d: NodeData): string => {
+    if (d.id === highlightRef.current || d.isCurrent) return '#fff';
+    if (d.isEnding) return '#d4af37';
+    return 'rgba(255, 255, 255, 0.6)';
+  }, []);
+  const nodeStrokeWidth = useCallback(
+    (d: NodeData): number =>
+      d.id === highlightRef.current || d.isCurrent || d.isEnding ? 2.5 : 1.5,
+    []
+  );
+
+  // Fit all visible nodes in view. Reads the persistent simulation store (the
+  // live positions) rather than the nodesData prop, which lags by a render after
+  // UPDATE_NODE_POSITIONS — so the fit always includes freshly revealed nodes and
+  // never sees an undefined/NaN coordinate.
+  const zoomToFit = useCallback((duration = 750, paddingPercent = 0.85) => {
+    if (!svgRef.current || !zoomRef.current) return;
+    const fitNodes = nodesStoreRef.current.size ? [...nodesStoreRef.current.values()] : nodesData;
+    if (!fitNodes.length) return;
     const svg = select(svgRef.current);
-    const bounds = {
-      x: { min: Infinity, max: -Infinity },
-      y: { min: Infinity, max: -Infinity }
-    };
+    const bounds = { x: { min: Infinity, max: -Infinity }, y: { min: Infinity, max: -Infinity } };
 
-    // Calculate bounds of all visible nodes
-    nodesData.forEach(node => {
-      if (node.x === undefined || node.y === undefined) return;
-      
-      const x = node.x;
-      const y = node.y;
+    fitNodes.forEach((node) => {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
       const nodeSize = node.size || 25;
-      
-      bounds.x.min = Math.min(bounds.x.min, x - nodeSize);
-      bounds.x.max = Math.max(bounds.x.max, x + nodeSize);
-      bounds.y.min = Math.min(bounds.y.min, y - nodeSize);
-      bounds.y.max = Math.max(bounds.y.max, y + nodeSize);
+      bounds.x.min = Math.min(bounds.x.min, (node.x as number) - nodeSize);
+      bounds.x.max = Math.max(bounds.x.max, (node.x as number) + nodeSize);
+      bounds.y.min = Math.min(bounds.y.min, (node.y as number) - nodeSize);
+      bounds.y.max = Math.max(bounds.y.max, (node.y as number) + nodeSize);
     });
-    
-    // Only proceed if we have valid bounds
-    if (bounds.x.min === Infinity || nodesData.length <= 1) {
-      // For a single node, center on it with a fixed scale
-      const node = nodesData[0];
-      if (node && node.x !== undefined && node.y !== undefined) {
-        const tx = width / 2 - node.x;
-        const ty = height / 2 - node.y;
+
+    if (bounds.x.min === Infinity || fitNodes.length <= 1) {
+      const node = fitNodes[0];
+      if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
+        // Centre the single node: screen = scale*p + translate, so to land p at
+        // (width/2, height/2) the translate must subtract scale*p (not just p).
+        const scale = 1.2;
+        const tx = width / 2 - scale * (node.x as number);
+        const ty = height / 2 - scale * (node.y as number);
         zoomRef.current.transform(
           svg.transition().duration(duration),
-          zoomIdentity.translate(tx, ty).scale(1.2)
+          zoomIdentity.translate(tx, ty).scale(scale)
         );
       }
       return;
     }
-    
-    // Calculate the scale to fit all nodes with padding
+
     const dx = bounds.x.max - bounds.x.min;
     const dy = bounds.y.max - bounds.y.min;
-    const x = (bounds.x.min + bounds.x.max) / 2;
-    const y = (bounds.y.min + bounds.y.max) / 2;
-    
-    // Prevent division by zero
+    const cx = (bounds.x.min + bounds.x.max) / 2;
+    const cy = (bounds.y.min + bounds.y.max) / 2;
     if (dx === 0 || dy === 0) return;
-    
     const scale = paddingPercent / Math.max(dx / width, dy / height);
-    const translate = [width / 2 - scale * x, height / 2 - scale * y];
-    
-    // Apply the transform
+    const translate = [width / 2 - scale * cx, height / 2 - scale * cy];
     zoomRef.current.transform(
       svg.transition().duration(duration),
       zoomIdentity.translate(translate[0], translate[1]).scale(scale)
     );
   }, [nodesData, width, height]);
+  zoomToFitRef.current = () => zoomToFit(750, 0.8);
 
-  // Function to animate node expansion
+  // Animate the clicked node expanding to fill the screen (the transition into
+  // the narrative page). Operates on the live selections.
   const animateNodeExpansion = useCallback((
-    nodeId: string, 
+    nodeId: string,
     nodeElements: D3NodeSelection,
     linkElements: D3LinkSelection,
     maxRadius: number
   ) => {
-    // Find the target node
-    const targetNode = nodeElements
-      .filter((d: NodeData) => d.id === nodeId)
-      .select('.node-main-circle');
-    
-    if (!targetNode.empty()) {
-      // Get current radius before animation
-      const currentRadius = parseFloat(targetNode.attr('r') || '0');
-      
-      // Create an expanding circle from the current node's position
-      targetNode
-        .transition()
-        .duration(1200) // Slower animation
-        .ease(easeQuadOut)
-        .attr('r', maxRadius)
-        .style('fill-opacity', 0.7); // Semi-transparent as it expands
-      
-      // Add a pulse effect before expansion
-      targetNode
-        .transition()
-        .duration(300)
-        .attr('r', currentRadius * 1.2)
-        .transition()
-        .duration(1200)
-        .attr('r', maxRadius);
-      
-      // Fade out other elements
-      nodeElements
-        .filter((d: NodeData) => d.id !== nodeId)
-        .transition()
-        .duration(600)
-        .style('opacity', 0);
-        
-      linkElements
-        .transition()
-        .duration(500)
-        .style('opacity', 0);
-    }
+    const targetNode = nodeElements.filter((d: NodeData) => d.id === nodeId).select('.node-main-circle');
+    if (targetNode.empty()) return;
+    const currentRadius = parseFloat(targetNode.attr('r') || '0');
+    targetNode.transition().duration(1200).ease(easeQuadOut).attr('r', maxRadius).style('fill-opacity', 0.7);
+    targetNode.transition().duration(300).attr('r', currentRadius * 1.2)
+      .transition().duration(1200).attr('r', maxRadius);
+    nodeElements.filter((d: NodeData) => d.id !== nodeId).transition().duration(600).style('opacity', 0);
+    linkElements.transition().duration(500).style('opacity', 0);
   }, []);
 
-  // Expose the zoomToFit function through the ref
+  // Expose zoomToFit to the parent.
   useEffect(() => {
-    if (onZoomToFitRef) {
-      onZoomToFitRef.current = () => zoomToFit(750, 0.85);
-    }
-    
+    if (onZoomToFitRef) onZoomToFitRef.current = () => zoomToFit(750, 0.85);
     return () => {
-      if (onZoomToFitRef) {
-        onZoomToFitRef.current = null;
-      }
+      if (onZoomToFitRef) onZoomToFitRef.current = null;
     };
   }, [onZoomToFitRef, zoomToFit]);
 
+  // ── Scaffold (mount once) ────────────────────────────────────────────────
+  // Build the SVG, defs, groups, zoom, tooltip and the persistent simulation.
+  // Width/height are captured here and kept current by the resize effect below.
   useEffect(() => {
-    if (!svgRef.current || !nodesData.length) return;
+    if (!svgRef.current) return;
+    const svg = select(svgRef.current);
+    svg.selectAll('*').remove();
+    svg.attr('width', width).attr('height', height)
+      .style('display', 'block').style('margin', '0 auto').style('overflow', 'visible');
 
-    // Make sure we have valid data to render
-    if (nodesData.length === 0) {
-      return;
-    }
-    
+    const g = svg.append('g').attr('class', 'main-group');
+    gRef.current = g;
+    linkGroupRef.current = g.append('g').attr('class', 'links');
+    nodeGroupRef.current = g.append('g').attr('class', 'nodes');
 
-    // Clear previous SVG content and refs
-    const svgSelection = select(svgRef.current);
-    svgSelection.selectAll('*').remove();
-    nodeElementsRef.current = null;
-    linkElementsRef.current = null;
-
-    // Set full size
-    svgSelection.attr('width', width)
-      .attr('height', height)
-      .style('display', 'block')
-      .style('margin', '0 auto')
-      .style('overflow', 'visible'); // Changed from 'hidden' to allow overflow
-
-    // Create main group for all elements
-    const g = svgSelection.append('g').attr('class', 'main-group');
-    
-    // Create map of nodeId to node for faster lookup
-    const nodeMap = new Map<string, NodeData>();
-    nodesData.forEach((node, i) => {
-      // Get the node size (or default)
-      const nodeSize = node.size || 25;
-      
-      if (node.x === undefined || node.y === undefined) {
-        // Position nodes in a circle formation centered in the visible area
-        const angle = (i * (2 * Math.PI)) / nodesData.length;
-        const radius = Math.min(width, height) * 0.3 + nodeSize * 0.5;
-        
-        // Center at width/2, height/2 to place in middle of container
-        node.x = (width / 2) + Math.cos(angle) * radius;
-        node.y = (height / 2) + Math.sin(angle) * radius;
-      }
-      
-      // Add node to the map
-      nodeMap.set(node.id, node);
+    const defs = svg.append('defs');
+    const glowColors = [
+      { id: 'glow-normal', strength: 2 },
+      { id: 'glow-visited', strength: 3 },
+      { id: 'glow-highlighted', strength: 5 },
+    ];
+    glowColors.forEach(({ id, strength }) => {
+      const filter = defs.append('filter').attr('id', id)
+        .attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+      filter.append('feGaussianBlur').attr('stdDeviation', strength).attr('result', 'coloredBlur');
+      const feMerge = filter.append('feMerge');
+      feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+      feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
     });
+    // Arrowhead for the walked "trail" links, so the path reads as directed.
+    defs.append('marker').attr('id', 'trail-arrow')
+      .attr('viewBox', '0 -5 10 10').attr('refX', 9).attr('refY', 0)
+      .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-4L9,0L0,4').style('fill', '#ffcc00');
 
-    // Define zoom behavior
-    const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 3]) // Allow more zoom range (out to 0.2x, in to 3x)
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 3])
+      // Set the extent explicitly to the known viewport so d3-zoom never reads
+      // SVGSVGElement.width.baseVal (jsdom doesn't implement it, and it's just
+      // the container size anyway).
+      .extent([[0, 0], [width, height]])
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
         g.attr('transform', event.transform.toString());
       });
+    zoomRef.current = zoomBehavior;
+    svg.call(zoomBehavior).on('wheel', (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) event.preventDefault();
+    });
+    // Start slightly zoomed out but CENTRED: the simulation's forceCenter places
+    // nodes around (width/2, height/2) in user space, so scale about that point
+    // rather than translating by it (which would shove everything bottom-right
+    // until zoomToFit fires).
+    const initialScale = 0.8;
+    zoomBehavior.transform(
+      svg,
+      zoomIdentity.translate((width / 2) * (1 - initialScale), (height / 2) * (1 - initialScale)).scale(initialScale)
+    );
 
-    zoomRef.current = zoomBehaviorInstance;
+    const tooltip = g.append('g').attr('class', 'tooltip').style('opacity', 0).style('pointer-events', 'none');
+    tooltip.append('rect').attr('x', -60).attr('y', -25).attr('width', 120).attr('height', 25)
+      .attr('rx', 5).attr('ry', 5).style('fill', 'rgba(0, 0, 0, 0.7)');
+    tooltip.append('text').attr('x', 0).attr('y', -8).attr('text-anchor', 'middle')
+      .style('fill', '#fff').style('font-size', '12px');
+    tooltipRef.current = tooltip;
 
-    // Apply the zoom behavior to the SVG
-    svgSelection.call(zoomBehaviorInstance)
-      // Prevent default scrolling behavior when inside the SVG
-      .on("wheel", (event) => {
-        if (event.ctrlKey || event.metaKey) {
-          event.preventDefault();
-        }
-      });
+    const linkForce = forceLink<NodeData, CustomSimulationLink>([])
+      .id((d: NodeData) => d.id).distance(100).strength(0.5);
+    linkForceRef.current = linkForce;
+    const simulation = forceSimulation<NodeData>([])
+      .force('link', linkForce)
+      .force('charge', forceManyBody().strength(-300).distanceMax(500))
+      .force('center', forceCenter(width / 2, height / 2).strength(0.1))
+      .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 25) + 15))
+      .force('x', forceX(width / 2).strength(0.03))
+      .force('y', forceY(height / 2).strength(0.03));
+    simulation.stop(); // don't run until there's data
+    simulationRef.current = simulation;
 
-    // Set initial transform - centered in the middle with a slight zoom
-    const initialTransform = zoomIdentity
-      .translate(width / 2, height / 2)
-      .scale(0.8);  // Start slightly zoomed out to show context
-
-    // Apply the initial transform
-    zoomBehaviorInstance.transform(svgSelection, initialTransform);
-    
-    const defs = svgSelection.append("defs");
-
-    // Glow filters
-    const glowColors = [
-      { id: "glow-normal", color: "white", strength: 2 },
-      { id: "glow-visited", color: "#6a0dad", strength: 3 },
-      { id: "glow-highlighted", color: "#ffcc00", strength: 5 }
-    ];
-
-    glowColors.forEach(({ id, color: _color, strength }) => {
-      const filter = defs.append("filter")
-        .attr("id", id)
-        .attr("x", "-50%")
-        .attr("y", "-50%")
-        .attr("width", "200%")
-        .attr("height", "200%");
-
-      filter.append("feGaussianBlur")
-        .attr("stdDeviation", strength)
-        .attr("result", "coloredBlur");
-
-      const feMerge = filter.append("feMerge");
-      feMerge.append("feMergeNode").attr("in", "coloredBlur");
-      feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+    simulation.on('tick', () => {
+      const linkSel = linkElementsRef.current;
+      const nodeSel = nodeElementsRef.current;
+      if (linkSel) {
+        linkSel
+          .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
+          .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
+          .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
+          .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
+      }
+      if (nodeSel) {
+        nodeSel.each((d: NodeData) => {
+          if (d.x !== undefined && d.y !== undefined) {
+            const f = 0.01;
+            if (d.x < -width) d.x += f * (-width - d.x);
+            if (d.x > width * 2) d.x -= f * (d.x - width * 2);
+            if (d.y < -height) d.y += f * (-height - d.y);
+            if (d.y > height * 2) d.y -= f * (d.y - height * 2);
+          }
+        });
+        nodeSel.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
+      }
     });
 
-    // Helper function to calculate appropriate node size based on container dimensions
-    const calculateNodeSize = () => {
-      // Scale node size based on container size
-      const minDimension = Math.min(width, height);
-      const baseSize = minDimension / 15; // Size relative to container
-      return Math.max(20, Math.min(40, baseSize)); // Min 20px, max 40px
+    simulation.on('end', () => {
+      const positions = [...nodesStoreRef.current.values()].map((n) => ({ id: n.id, x: n.x ?? 0, y: n.y ?? 0 }));
+      if (positions.length) dispatch({ type: 'UPDATE_NODE_POSITIONS', nodes: positions });
+      zoomToFitRef.current?.();
+    });
+
+    return () => {
+      simulation.stop();
+      simulationRef.current = null;
+      svg.selectAll('*').remove();
     };
+    // Mount-once scaffold; width/height/dispatch are captured here and kept
+    // current by the resize effect. Re-running would tear the graph down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Use this function when rendering nodes
-    const nodeSize = calculateNodeSize();
+  // ── Resize: keep forces, zoom extent and svg size in step with the box ────
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = select(svgRef.current);
+    svg.attr('width', width).attr('height', height);
+    zoomRef.current?.extent([[0, 0], [width, height]]);
+    const sim = simulationRef.current;
+    if (!sim) return;
+    (sim.force('center') as ForceCenter<NodeData> | undefined)?.x(width / 2).y(height / 2);
+    (sim.force('x') as ForceX<NodeData> | undefined)?.x(width / 2);
+    (sim.force('y') as ForceY<NodeData> | undefined)?.y(height / 2);
+  }, [width, height]);
 
-    // Process links, ensuring they reference valid nodes
-    const processedLinks = linksData
-      .filter(link => {
-        const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-        const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-        return nodeMap.has(sourceId) && nodeMap.has(targetId);
-      })
-      .map(link => ({
-        ...link,
-        source: typeof link.source === 'string' ? link.source : (link.source as NodeData).id,
-        target: typeof link.target === 'string' ? link.target : (link.target as NodeData).id
-      }));
-    
+  // ── Data join: enter / update / exit on each data change ──────────────────
+  useEffect(() => {
+    const sim = simulationRef.current;
+    const nodeGroup = nodeGroupRef.current;
+    const linkGroup = linkGroupRef.current;
+    const linkForce = linkForceRef.current;
+    if (!sim || !nodeGroup || !linkGroup || !linkForce) return;
 
-    // Prepare links for the simulation
-    const linksForSimulation: LinkData[] = processedLinks
-      .map(link => ({
-        ...link,
-        source: typeof link.source === 'string' ? link.source : (link.source as NodeData).id,
-        target: typeof link.target === 'string' ? link.target : (link.target as NodeData).id,
-      }));
+    const baseSize = Math.max(20, Math.min(40, Math.min(width, height) / 15));
 
-    // Create gradients for links
-    const linksGroup = g.append('g').attr('class', 'links');
-    linksForSimulation.forEach((link, i) => {
-      const gradientId = `link-gradient-${i}`;
-      const gradient = defs.append("linearGradient")
-        .attr("id", gradientId)
-        .attr("gradientUnits", "userSpaceOnUse");
+    if (!nodesData.length) {
+      nodeGroup.selectAll('*').remove();
+      linkGroup.selectAll('*').remove();
+      nodeElementsRef.current = null;
+      linkElementsRef.current = null;
+      nodesStoreRef.current.clear();
+      structureSigRef.current = '';
+      return;
+    }
 
-      const sourceNode = nodeMap.get(link.source as string);
-      const targetNode = nodeMap.get(link.target as string);
+    const wasEmpty = nodesStoreRef.current.size === 0;
+    const simNodes = syncSimulationNodes(nodesStoreRef.current, nodesData, linksData, width, height);
+    const idSet = new Set(simNodes.map((n) => n.id));
+    const simLinks: CustomSimulationLink[] = linksData
+      .map((l) => ({ source: idOf(l.source), target: idOf(l.target), color: l.color, width: l.width, onTrail: l.onTrail }))
+      .filter((l) => idSet.has(l.source as string) && idSet.has(l.target as string));
 
-      const sourceColor = sourceNode?.color || '#999';
-      const targetColor = targetNode?.color || '#999';
+    // ── Node join ──
+    const nodeSel = nodeGroup
+      .selectAll<SVGGElement, NodeData>('g.node-group')
+      .data(simNodes, (d: NodeData) => d.id)
+      .join(
+        (enter) => {
+          const gEnter = enter.append('g').attr('class', 'node-group').style('cursor', 'pointer');
 
-      gradient.append("stop").attr("offset", "0%").attr("stop-color", sourceColor);
-      gradient.append("stop").attr("offset", "100%").attr("stop-color", targetColor);
+          gEnter.call(
+            drag<SVGGElement, NodeData>()
+              .on('start', (event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) => {
+                if (!event.active) simulationRef.current?.alphaTarget(0.3).restart();
+                d.fx = d.x ?? 0; d.fy = d.y ?? 0;
+              })
+              .on('drag', (event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) => {
+                d.fx = event.x; d.fy = event.y;
+              })
+              .on('end', (event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) => {
+                if (!event.active) simulationRef.current?.alphaTarget(0);
+                d.fx = null; d.fy = null;
+              })
+          );
+
+          gEnter.on('click', (event: MouseEvent, d: NodeData) => {
+            event.stopPropagation();
+            onNodeClickRef.current?.(d.id, d);
+          });
+
+          gEnter.on('mouseenter', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
+            select<SVGGElement, NodeData>(this).select<SVGCircleElement>('circle.node-main-circle')
+              .transition().duration(300).attr('r', (d.size || baseSize) * 1.2)
+              .style('stroke-width', 2.5).style('stroke', '#fff');
+            const linkSel = linkElementsRef.current;
+            if (linkSel) {
+              linkSel.filter((l: CustomSimulationLink) =>
+                (l.source as NodeData).id === d.id || (l.target as NodeData).id === d.id)
+                .transition().duration(300).style('stroke-opacity', 1)
+                .style('stroke-width', (l: CustomSimulationLink) => (l.width || 2) * 1.5);
+            }
+            const tooltip = tooltipRef.current;
+            if (tooltip) {
+              tooltip.attr('transform', `translate(${d.x || 0},${(d.y || 0) - (d.size || 15) - 30})`);
+              tooltip.select('text').text(d.visitedCount && d.visitedCount > 0
+                ? `${d.label || d.id} (Visited ${d.visitedCount}×)` : d.label || d.id);
+              tooltip.transition().duration(300).style('opacity', 1);
+            }
+          });
+
+          gEnter.on('mouseleave', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
+            select<SVGGElement, NodeData>(this).select<SVGCircleElement>('circle.node-main-circle')
+              .transition().duration(500).attr('r', d.size || baseSize)
+              .style('stroke-width', nodeStrokeWidth(d)).style('stroke', nodeStroke(d));
+            linkElementsRef.current?.transition().duration(500).style('stroke-opacity', (l: CustomSimulationLink) => (l.onTrail ? 0.9 : 0.6))
+              .style('stroke-width', (l: CustomSimulationLink) => (l.onTrail ? (l.width || 2) + 1 : l.width || 2));
+            tooltipRef.current?.transition().duration(200).style('opacity', 0);
+          });
+
+          // Outer glow ring.
+          gEnter.append('circle').attr('class', 'glow-ring')
+            .attr('r', (d: NodeData) => (d.size || 35) + 5).style('fill', 'transparent').style('opacity', 0.7);
+          // Main circle — grows in from r=0 (only entering nodes run this).
+          gEnter.append('circle').attr('class', 'node-main-circle').attr('r', 0)
+            .transition().duration(800).ease(easeBounce).attr('r', (d: NodeData) => d.size || baseSize);
+          // Label.
+          gEnter.append('text').attr('class', 'node-label').attr('x', 0).attr('text-anchor', 'middle')
+            .style('font-size', '12px').style('fill', 'rgba(255, 255, 255, 0.9)')
+            .style('pointer-events', 'none').style('text-shadow', '0px 0px 3px rgba(0, 0, 0, 0.7)');
+
+          return gEnter;
+        },
+        (update) => update,
+        (exit) => exit.transition().duration(400).style('opacity', 0).remove()
+      );
+
+    nodeElementsRef.current = nodeSel;
+
+    // Update the data-driven visuals on the full (enter + update) selection.
+    nodeSel.select<SVGCircleElement>('circle.glow-ring').style('filter', (d: NodeData) => nodeGlow(d));
+    nodeSel.select<SVGCircleElement>('circle.node-main-circle')
+      .style('fill', (d: NodeData) => nodeFill(d))
+      .style('stroke', (d: NodeData) => nodeStroke(d))
+      .style('stroke-width', (d: NodeData) => nodeStrokeWidth(d));
+    nodeSel.select<SVGTextElement>('text.node-label')
+      .attr('y', (d: NodeData) => (d.size || baseSize) + 15)
+      .text((d: NodeData) => d.label || d.id);
+
+    // Conditional badges (only present for the relevant nodes) via nested joins.
+    nodeSel.each(function (this: SVGGElement, d: NodeData) {
+      const gNode = select<SVGGElement, NodeData>(this);
+      const visited = !!(d.visitedCount && d.visitedCount > 0);
+      const ordered = d.visitOrder !== undefined;
+
+      gNode.selectAll<SVGCircleElement, NodeData>('circle.visit-indicator')
+        .data(visited ? [d] : [], (vd: NodeData) => vd.id)
+        .join((e) => e.append('circle').attr('class', 'visit-indicator').attr('r', 5)
+          .style('fill', '#ffcc00').style('stroke', '#fff').style('stroke-width', 1))
+        .attr('cx', (vd: NodeData) => (vd.size || baseSize) * 0.6)
+        .attr('cy', (vd: NodeData) => -(vd.size || baseSize) * 0.6);
+      gNode.selectAll<SVGTextElement, NodeData>('text.visit-count')
+        .data(visited ? [d] : [], (vd: NodeData) => vd.id)
+        .join((e) => e.append('text').attr('class', 'visit-count').attr('text-anchor', 'middle')
+          .style('font-size', '8px').style('fill', '#000').style('pointer-events', 'none'))
+        .attr('x', (vd: NodeData) => (vd.size || baseSize) * 0.6)
+        .attr('y', (vd: NodeData) => -(vd.size || baseSize) * 0.6 + 4)
+        .text((vd: NodeData) => vd.visitedCount?.toString() ?? '');
+
+      gNode.selectAll<SVGCircleElement, NodeData>('circle.order-indicator')
+        .data(ordered ? [d] : [], (vd: NodeData) => vd.id)
+        .join((e) => e.append('circle').attr('class', 'order-indicator').attr('r', 7)
+          .style('fill', '#1e232d').style('stroke', '#ffcc00').style('stroke-width', 1.5))
+        .attr('cx', (vd: NodeData) => -(vd.size || baseSize) * 0.6)
+        .attr('cy', (vd: NodeData) => -(vd.size || baseSize) * 0.6);
+      gNode.selectAll<SVGTextElement, NodeData>('text.visit-order')
+        .data(ordered ? [d] : [], (vd: NodeData) => vd.id)
+        .join((e) => e.append('text').attr('class', 'visit-order').attr('text-anchor', 'middle')
+          .style('font-size', '9px').style('font-weight', 'bold').style('fill', '#ffcc00').style('pointer-events', 'none'))
+        .attr('x', (vd: NodeData) => -(vd.size || baseSize) * 0.6)
+        .attr('y', (vd: NodeData) => -(vd.size || baseSize) * 0.6 + 3)
+        .text((vd: NodeData) => vd.visitOrder?.toString() ?? '');
     });
 
-    const linkElements = linksGroup.selectAll('line')
-      .data(linksForSimulation as unknown as CustomSimulationLink[])
-      .enter()
-      .append('line')
-      .style('stroke', (_: CustomSimulationLink, i: number) => `url(#link-gradient-${i})`)
-      .style('stroke-opacity', 0.6)
-      .style('stroke-width', (d: CustomSimulationLink) => d.width || 2)
-      .style('stroke-dasharray', '5,5')
-      .style('stroke-dashoffset', 10);
-
-    // Store linkElements in ref for later use
-    linkElementsRef.current = linkElements;
-
-    // Animate stroke-dashoffset separately
-    linkElements.transition()
-      .duration(1500)
-      .style('stroke-dashoffset', 0);
-
-    const nodesGroup = g.append('g').attr('class', 'nodes');
-    const nodeElements = nodesGroup.selectAll('g')
-      .data(nodesData)
-      .enter()
-      .append('g')
-      .attr('class', 'node-group')
-      .style('cursor', 'pointer')
-      .call(
-        (() => {
-          const dragBehaviorInstance: DragBehavior<SVGGElement, NodeData, NodeData | NodeData> = drag<SVGGElement, NodeData, NodeData>()
-            .on('start', function (this: SVGGElement, event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) {
-              if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(0.3).restart();
-              d.fx = d.x ?? 0;
-              d.fy = d.y ?? 0;
-            })
-            .on('drag', function (this: SVGGElement, event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) {
-              d.fx = event.x;
-              d.fy = event.y;
-            })
-            .on('end', function (this: SVGGElement, event: D3DragEvent<SVGGElement, NodeData, NodeData>, d: NodeData) {
-              if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(0);
-              d.fx = null;
-              d.fy = null;
-            });
-          return dragBehaviorInstance;
-        })()
-      )
-      .on('click', (event: MouseEvent, d: NodeData) => {
-        event.stopPropagation();
-        if (onNodeClick) onNodeClick(d.id, d);
-      });
-
-    // Store nodeElements in ref for later use
-    nodeElementsRef.current = nodeElements;
-
-    // Optional icon for each node
-    nodeElements
-      .filter((d: NodeData) => !!d.iconUrl)
-      .append('image')
-      .attr('href', (d: NodeData) => d.iconUrl || '')
-      .attr('x', (d: NodeData) => -(d.size || 15) / 2)
-      .attr('y', (d: NodeData) => -(d.size || 15) / 2)
-      .attr('width', (d: NodeData) => (d.size || 15))
-      .attr('height', (d: NodeData) => (d.size || 15))
-      .attr('clip-path', 'circle(50%)')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
-      .on('error', function (this: SVGImageElement) {
-        select(this).remove();
-      });
-
-    nodeElements.append('circle')
-      .attr('r', (d: NodeData) => (d.size || 35) + 5)
-      .style('fill', 'transparent')
-      .style('filter', (d: NodeData) => {
-        if (d.id === highlightedNodeId) return 'url(#glow-highlighted)';
-        if (d.visitedCount && d.visitedCount > 0) return 'url(#glow-visited)';
-        return 'url(#glow-normal)';
-      })
-      .style('opacity', 0.7);
-
-    // Main circle layer with animation
-    nodeElements.append('circle')
-      .attr('class', 'node-main-circle')
-      .attr('r', 0)
-      .style('fill', (d: NodeData) => {
-        let baseColor = d.color || 'steelblue';
-        if (d.visitedCount && d.visitedCount > 1) baseColor = '#6a0dad';
-        if (d.id === highlightedNodeId) baseColor = '#ffcc00';
-        return baseColor;
-      })
-      .style('stroke', (d: NodeData) => d.id === highlightedNodeId ? '#fff' : 'rgba(255, 255, 255, 0.6)')
-      .style('stroke-width', (d: NodeData) => d.id === highlightedNodeId ? 2.5 : 1.5)
-      .transition()
-      .duration(800)
-      .ease(easeBounce)
-      .attr('r', (d: NodeData) => d.size || nodeSize);
-
-    // Add pulsing animation for highlighted node
+    // Pulse the highlighted node.
     if (highlightedNodeId) {
-      nodeElements
-        .filter((d: NodeData) => d.id === highlightedNodeId)
+      nodeSel.filter((d: NodeData) => d.id === highlightedNodeId)
         .select<SVGCircleElement>('.node-main-circle')
         .call((selection: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
           const pulse = (sel: Selection<SVGCircleElement, NodeData, SVGGElement, unknown>) => {
-            sel
-              .transition()
-              .duration(1000)
-              .attr('r', (d: NodeData) => (d.size || nodeSize) * 1.2)
-              .transition()
-              .duration(1000)
-              .attr('r', (d: NodeData) => d.size || nodeSize)
+            sel.transition().duration(1000).attr('r', (d: NodeData) => (d.size || baseSize) * 1.2)
+              .transition().duration(1000).attr('r', (d: NodeData) => d.size || baseSize)
               .on('end', () => pulse(sel));
           };
           pulse(selection);
         });
     }
 
-    // Add node labels
-    nodeElements.append('text')
-      .text((d: NodeData) => d.label || d.id)
-      .attr('x', 0)
-      .attr('y', (d: NodeData) => (d.size || nodeSize) + 15)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '12px')
-      .style('fill', 'rgba(255, 255, 255, 0.9)')
-      .style('pointer-events', 'none')
-      .style('text-shadow', '0px 0px 3px rgba(0, 0, 0, 0.7)');
+    // ── Link join ──
+    const linkSel = linkGroup
+      .selectAll<SVGLineElement, CustomSimulationLink>('line')
+      .data(simLinks, (d: CustomSimulationLink) => `${idOf(d.source as string | NodeData)}->${idOf(d.target as string | NodeData)}`)
+      .join(
+        (enter) => enter.append('line').style('stroke-dashoffset', 10),
+        (update) => update,
+        (exit) => exit.transition().duration(300).style('stroke-opacity', 0).remove()
+      );
 
-    // Improved simulation with better forces
-    const linkForce: ForceLink<NodeData, CustomSimulationLink> = forceLink<NodeData, CustomSimulationLink>(linksForSimulation as CustomSimulationLink[])
-      .id((d: NodeData) => d.id)
-      .distance(100)
-      .strength(0.5); // Increased link strength
+    linkElementsRef.current = linkSel;
+    linkSel
+      .classed('trail', (d: CustomSimulationLink) => !!d.onTrail)
+      // Walked edges are solid, brighter and carry a direction arrow; un-walked
+      // (merely revealed) edges keep the faint dashed look.
+      .style('stroke', (d: CustomSimulationLink) => (d.onTrail ? '#ffcc00' : d.color || '#888'))
+      .style('stroke-opacity', (d: CustomSimulationLink) => (d.onTrail ? 0.9 : 0.6))
+      .style('stroke-width', (d: CustomSimulationLink) => (d.onTrail ? (d.width || 2) + 1 : d.width || 2))
+      .style('stroke-dasharray', (d: CustomSimulationLink) => (d.onTrail ? 'none' : '5,5'))
+      .attr('marker-end', (d: CustomSimulationLink) => (d.onTrail ? 'url(#trail-arrow)' : null));
 
-    const simulationInstance: Simulation<NodeData, CustomSimulationLink> = forceSimulation(nodesData)
-      .force('link', linkForce)
-      .force('charge', forceManyBody()
-        .strength(-300)
-        .distanceMax(500)) // Limit the distance over which the charge force acts
-      .force('center', forceCenter(width / 2, height / 2).strength(0.1))
-      .force('collision', forceCollide<NodeData>().radius((d: NodeData) => (d.size || 25) + 15))
-      .force('x', forceX(width / 2).strength(0.03)) // Decreased strength
-      .force('y', forceY(height / 2).strength(0.03)); // Decreased strength
+    // Hand the (possibly new) node/link objects to the simulation.
+    sim.nodes(simNodes);
+    linkForce.links(simLinks);
 
-    simulationRef.current = simulationInstance;
+    // Reheat ONLY when the structure changed (a reveal) or on a cold start —
+    // never on a pure position/presentation update, which avoids re-bouncing the
+    // settled graph and breaks the settle→dispatch→re-render→reheat loop.
+    const sig = `${simNodes.map((n) => n.id).join('|')}#${simLinks.map((l) => `${l.source as string}>${l.target as string}`).join('|')}`;
+    const structureChanged = sig !== structureSigRef.current;
+    structureSigRef.current = sig;
+    if (structureChanged) sim.alpha(wasEmpty ? 0.8 : 0.4).restart();
 
-    // Run simulation with a gentle cooldown
-    simulationInstance.alpha(0.8).restart();
-
-    // Add a tick event handler with softer constraints
-    simulationInstance.on('tick', () => {
-      // Apply very soft constraints or no constraints at all
-      nodeElements.each((d: NodeData) => {
-        // Apply gentle force to keep nodes from flying too far
-        if (d.x !== undefined && d.y !== undefined) {
-          const boundaryForce = 0.01; // Very gentle force
-          
-          // Apply gentle force to keep nodes from flying too far
-          if (d.x < -width) d.x += boundaryForce * (-width - d.x);
-          if (d.x > width * 2) d.x -= boundaryForce * (d.x - width * 2);
-          if (d.y < -height) d.y += boundaryForce * (-height - d.y);
-          if (d.y > height * 2) d.y -= boundaryForce * (d.y - height * 2);
-        }
-      });
-      
-      // Update link positions
-      linkElements
-        .attr('x1', (d: CustomSimulationLink) => (d.source as NodeData).x || 0)
-        .attr('y1', (d: CustomSimulationLink) => (d.source as NodeData).y || 0)
-        .attr('x2', (d: CustomSimulationLink) => (d.target as NodeData).x || 0)
-        .attr('y2', (d: CustomSimulationLink) => (d.target as NodeData).y || 0);
-
-      // Update node positions
-      nodeElements.attr('transform', (d: NodeData) => `translate(${d.x || 0},${d.y || 0})`);
-    });
-
-    // Call zoomToFit and save positions after the simulation has stabilized
-    simulationInstance.on('end', () => {
-      // Extract final positions
-      const finalNodePositions = nodesData.map(node => ({
-        id: node.id,
-        x: node.x ?? 0, // Use 0 if undefined (shouldn't happen after simulation)
-        y: node.y ?? 0,
-      }));
-
-      // Dispatch action to update context state
-      dispatch({ type: 'UPDATE_NODE_POSITIONS', nodes: finalNodePositions });
-
-      // Now zoom to fit
-      zoomToFit(750, 0.8);
-    });
-
-    // Tooltip
-    const tooltip = g.append('g')
-      .attr('class', 'tooltip')
-      .style('opacity', 0)
-      .style('pointer-events', 'none');
-
-    tooltip.append('rect')
-      .attr('x', -60)
-      .attr('y', -25)
-      .attr('width', 120)
-      .attr('height', 25)
-      .attr('rx', 5)
-      .attr('ry', 5)
-      .style('fill', 'rgba(0, 0, 0, 0.7)');
-
-    tooltip.append('text')
-      .attr('x', 0)
-      .attr('y', -8)
-      .attr('text-anchor', 'middle')
-      .style('fill', '#fff')
-      .style('font-size', '12px');
-
-    // Add visit indicators
-    nodeElements
-      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
-      .append('circle')
-      .attr('class', 'visit-indicator')
-      .attr('r', 5)
-      .attr('cx', (d: NodeData) => (d.size || nodeSize) * 0.6)
-      .attr('cy', (d: NodeData) => -(d.size || nodeSize) * 0.6)
-      .style('fill', '#ffcc00')
-      .style('stroke', '#fff')
-      .style('stroke-width', 1);
-
-    nodeElements
-      .filter((d: NodeData) => !!(d.visitedCount && d.visitedCount > 0))
-      .append('text')
-      .attr('class', 'visit-count')
-      .attr('x', (d: NodeData) => (d.size || nodeSize) * 0.6)
-      .attr('y', (d: NodeData) => -(d.size || nodeSize) * 0.6 + 4)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '8px')
-      .style('fill', '#000')
-      .style('pointer-events', 'none')
-      .text((d: NodeData) => d.visitedCount?.toString() ?? '');
-
-    // Add hover tooltips
-    nodeElements
-      .on('mouseenter', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
-        const currentSelection = select<SVGGElement, NodeData>(this);
-        currentSelection.select<SVGCircleElement>('circle:not(.visit-indicator)')
-          .transition()
-          .duration(300)
-          .attr('r', (d.size || nodeSize) * 1.2)
-          .style('stroke-width', 2.5)
-          .style('stroke', '#fff');
-
-        const connectedLinks = linkElements.filter((link: CustomSimulationLink) => {
-            const sourceNode = link.source as NodeData;
-            const targetNode = link.target as NodeData;
-            return sourceNode.id === d.id || targetNode.id === d.id;
-        });
-
-        connectedLinks
-          .transition()
-          .duration(300)
-          .style('stroke-opacity', 1)
-          .style('stroke-width', (l: CustomSimulationLink) => (l.width || 2) * 1.5);
-        
-        tooltip.attr('transform', `translate(${d.x || 0},${(d.y || 0) - (d.size || 15) - 30})`);
-        tooltip.select('text')
-          .text(() => {
-            if (d.visitedCount && d.visitedCount > 0) {
-              return `${d.label || d.id} (Visited ${d.visitedCount}×)`;
-            }
-            return d.label || d.id;
-          });
-        
-        tooltip.transition()
-          .duration(300)
-          .style('opacity', 1);
-      })
-      .on('mouseleave', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
-        const currentSelection = select<SVGGElement, NodeData>(this);
-        currentSelection.select<SVGCircleElement>('circle:not(.visit-indicator)')
-          .transition()
-          .duration(500)
-          .attr('r', d.size || 15)
-          .style('stroke-width', d.id === highlightedNodeId ? 2.5 : 1.5)
-          .style('stroke', d.id === highlightedNodeId ? '#fff' : 'rgba(255, 255, 255, 0.6)');
-
-        linkElements
-          .transition()
-          .duration(500)
-          .style('stroke-opacity', 0.6)
-          .style('stroke-width', (l: CustomSimulationLink) => l.width || 2);
-
-        tooltip.transition()
-          .duration(200)
-          .style('opacity', 0);
-      });
-
-    // Add animation for the transition when enableZoomAnimation is true
     if (zoomToNode && enableZoomAnimation && nodeElementsRef.current && linkElementsRef.current) {
-      // Calculate the maximum radius needed to cover the screen
-      const maxRadius = Math.max(width, height);
-      
-      // Call our animation helper function
-      animateNodeExpansion(zoomToNode, nodeElementsRef.current, linkElementsRef.current, maxRadius);
+      animateNodeExpansion(zoomToNode, nodeElementsRef.current, linkElementsRef.current, Math.max(width, height));
     }
-
-    return () => {
-      if (simulationRef.current) {
-        simulationRef.current.stop();
-        simulationRef.current = null;
-      }
-    };
-    // Effect intentionally omits the stable `dispatch` from useStory; including
-    // it would not change behaviour and only churns the simulation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesData, linksData, onNodeClick, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation, animateNodeExpansion, zoomToFit]);
+  }, [
+    nodesData, linksData, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation,
+    nodeFill, nodeGlow, nodeStroke, nodeStrokeWidth, animateNodeExpansion,
+  ]);
 
   return (
-    <div className="node-map-container" style={{ 
-      width: '100%', 
-      height: '100%',
-      overflow: 'visible', // Changed from 'hidden' to 'visible'
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative'
+    <div className="node-map-container" style={{
+      width: '100%', height: '100%', overflow: 'visible',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative',
     }}>
-      <svg ref={svgRef} style={{ 
-        width: '100%', 
-        height: '100%',
-        overflow: 'visible' // Allow SVG to extend beyond its boundaries
-      }}></svg>
+      <svg ref={svgRef} style={{ width: '100%', height: '100%', overflow: 'visible' }}></svg>
     </div>
   );
 };

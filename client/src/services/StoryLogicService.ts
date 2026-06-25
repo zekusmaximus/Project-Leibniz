@@ -23,6 +23,7 @@ const ENDING_NODE_IDS = new Set<string>([
   'chorus',
   'descent',
   'emergence',
+  'persistence',
 ]);
 
 class StoryLogicService {
@@ -133,12 +134,13 @@ class StoryLogicService {
       executed: false,
     });
 
-    // Order endings: the two order-determined ways through the three sources.
-    // These fire only when the LAST three visits are exactly the three sources
-    // in a given order (reachable by chaining the source↔source resonance
-    // shortcuts), so the literal order you walk them picks the ending.
-    //   descent   = whisper → echo → silence (the voices fading out)
-    //   emergence = silence → echo → whisper (booting up out of the Null)
+    // Order endings: the order-determined ways through the three sources. These
+    // fire only when the LAST three visits are exactly the three sources in a
+    // given order (reachable by chaining the source↔source resonance shortcuts),
+    // so the literal order you walk them picks the ending.
+    //   descent     = whisper → echo → silence (the voices fading out)
+    //   emergence   = silence → echo → whisper (booting up out of the Null)
+    //   persistence = whisper → silence → echo (the word erased, its echo kept)
     // Reuse the condition DSL rather than re-implementing the tail check.
     const descentOrder = compileCondition({
       kind: 'historyEndsWith',
@@ -164,6 +166,21 @@ class StoryLogicService {
       trigger: (state) => emergenceOrder(state),
       effect: () => ({
         flags: { emergenceDiscovered: true },
+      }),
+      priority: 60,
+      once: true,
+      executed: false,
+    });
+
+    const persistenceOrder = compileCondition({
+      kind: 'historyEndsWith',
+      sequence: ['whisperSource', 'silenceSource', 'echoChamber'],
+    });
+    this.addRule({
+      id: 'persistence_order',
+      trigger: (state) => persistenceOrder(state),
+      effect: () => ({
+        flags: { persistenceDiscovered: true },
       }),
       priority: 60,
       once: true,

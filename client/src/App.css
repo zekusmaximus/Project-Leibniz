@@ -83,6 +83,58 @@
   background-color: rgba(100, 108, 255, 0.4);
 }
 
+/* "Why this text?" — explains which adaptive fragments fired and why. */
+.adaptations {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+}
+
+.adaptations-toggle {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: inherit;
+  opacity: 0.75;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+.adaptations-toggle:hover {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.adaptations-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adaptation-item {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding-left: 10px;
+  border-left: 2px solid rgba(100, 108, 255, 0.5);
+}
+
+.adaptation-snippet {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.adaptation-reason {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.65;
+}
+
 /* For a better mobile experience */
 /* @media (max-width: 768px) {
   .story-text-container {

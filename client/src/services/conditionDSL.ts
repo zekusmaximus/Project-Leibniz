@@ -29,6 +29,15 @@ export type ConditionSpec =
   | { kind: 'flag'; key: string; equals?: boolean | number | string }
   // A node's visit count compares against `count` (default: visited at least once).
   | { kind: 'visited'; node: string; op?: ComparisonOp; count?: number }
+  // A node has never been visited (visit count is 0).
+  | { kind: 'notVisited'; node: string }
+  // The SUMMED visit count across several nodes compares against `count`
+  // (default: at least once between them). Lets a variant react to how much of
+  // the map the reader has wandered, not just one node.
+  | { kind: 'visitedCountAcross'; nodes: string[]; op?: ComparisonOp; count?: number }
+  // The node was visited within the last `steps` entries of history — recency,
+  // as opposed to `visited` which is true forever once a node is seen.
+  | { kind: 'withinNSteps'; node: string; steps: number }
   // The visit history ends with this exact consecutive sequence (visit ORDER).
   | { kind: 'historyEndsWith'; sequence: string[] }
   // These nodes were visited in this relative order (not necessarily adjacent).
@@ -80,6 +89,18 @@ export function compileCondition(spec: ConditionSpec): Predicate {
     case 'visited':
       return (state) =>
         compare(state.visitCounts[spec.node] ?? 0, spec.op ?? '>=', spec.count ?? 1);
+    case 'notVisited':
+      return (state) => (state.visitCounts[spec.node] ?? 0) === 0;
+    case 'visitedCountAcross':
+      return (state) =>
+        compare(
+          spec.nodes.reduce((sum, node) => sum + (state.visitCounts[node] ?? 0), 0),
+          spec.op ?? '>=',
+          spec.count ?? 1
+        );
+    case 'withinNSteps':
+      return (state) =>
+        spec.steps > 0 && state.history.slice(-spec.steps).includes(spec.node);
     case 'historyEndsWith':
       return (state) => endsWith(state.history, spec.sequence);
     case 'orderSeen':
@@ -114,7 +135,12 @@ export function isConditionSpec(value: unknown): value is ConditionSpec {
     case 'flag':
       return typeof value.key === 'string';
     case 'visited':
+    case 'notVisited':
       return typeof value.node === 'string';
+    case 'visitedCountAcross':
+      return isStringArray(value.nodes);
+    case 'withinNSteps':
+      return typeof value.node === 'string' && typeof value.steps === 'number';
     case 'historyEndsWith':
     case 'orderSeen':
       return isStringArray(value.sequence);
@@ -147,4 +173,64 @@ export function parseConditionSpec(raw: string): ConditionSpec | undefined {
 export function compileConditionFromString(raw: string): Predicate | undefined {
   const spec = parseConditionSpec(raw);
   return spec ? compileCondition(spec) : undefined;
+}
+
+function describeCount(op: ComparisonOp, count: number): string {
+  const times = `${count} time${count === 1 ? '' : 's'}`;
+  switch (op) {
+    case '>':
+      return `more than ${times}`;
+    case '>=':
+      return `at least ${times}`;
+    case '<':
+      return `fewer than ${times}`;
+    case '<=':
+      return `at most ${times}`;
+    case '==':
+      return `exactly ${times}`;
+  }
+}
+
+/**
+ * Render a ConditionSpec as a short, human-readable explanation — used to tell
+ * the reader *why* an adaptive text fragment appeared. `resolveLabel` maps a
+ * node id to a display name (defaults to the raw id), so callers with the story
+ * state can show "the Echo Chamber" instead of "echoChamber".
+ */
+export function describeCondition(
+  spec: ConditionSpec,
+  resolveLabel: (nodeId: string) => string = (id) => id
+): string {
+  switch (spec.kind) {
+    case 'flag':
+      return spec.equals === undefined
+        ? `the “${spec.key}” state is set`
+        : `“${spec.key}” equals ${String(spec.equals)}`;
+    case 'visited': {
+      const op = spec.op ?? '>=';
+      const count = spec.count ?? 1;
+      return op === '>=' && count === 1
+        ? `you have visited ${resolveLabel(spec.node)}`
+        : `you have visited ${resolveLabel(spec.node)} ${describeCount(op, count)}`;
+    }
+    case 'notVisited':
+      return `you have not visited ${resolveLabel(spec.node)}`;
+    case 'visitedCountAcross':
+      return `you have visited ${spec.nodes.map(resolveLabel).join(', ')} ${describeCount(
+        spec.op ?? '>=',
+        spec.count ?? 1
+      )} in total`;
+    case 'withinNSteps':
+      return `you visited ${resolveLabel(spec.node)} within the last ${spec.steps} steps`;
+    case 'historyEndsWith':
+      return `you arrived here via ${spec.sequence.map(resolveLabel).join(' → ')}`;
+    case 'orderSeen':
+      return `you saw ${spec.sequence.map(resolveLabel).join(' → ')} in that order`;
+    case 'and':
+      return spec.clauses.map((c) => describeCondition(c, resolveLabel)).join(' and ');
+    case 'or':
+      return spec.clauses.map((c) => describeCondition(c, resolveLabel)).join(' or ');
+    case 'not':
+      return `not (${describeCondition(spec.clause, resolveLabel)})`;
+  }
 }

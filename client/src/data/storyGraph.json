@@ -41,9 +41,26 @@
           "targetId": "emergence",
           "text": "Climb back up, out of the silence",
           "condition": "{\"kind\":\"flag\",\"key\":\"emergenceDiscovered\"}"
+        },
+        {
+          "targetId": "persistence",
+          "text": "Speak into the silence and follow only the echo it returns",
+          "condition": "{\"kind\":\"flag\",\"key\":\"persistenceDiscovered\"}"
         }
       ],
       "textVariants": [
+        {
+          "id": "unwalked-third",
+          "priority": 75,
+          "condition": "{\"kind\":\"and\",\"clauses\":[{\"kind\":\"flag\",\"key\":\"bothPathsVisited\"},{\"kind\":\"notVisited\",\"node\":\"silenceSource\"}]}",
+          "text": "Two grooves wind through the colours, not three. A path of silence still lies unworn — and the anomaly keeps the space for it open, exactly your size."
+        },
+        {
+          "id": "much-wandered",
+          "priority": 45,
+          "condition": "{\"kind\":\"visitedCountAcross\",\"nodes\":[\"whisperSource\",\"echoChamber\",\"silenceSource\"],\"op\":\">=\",\"count\":5}",
+          "text": "You have gone down and come back so many times that the colours have worn translucent with handling. The anomaly is tired of remembering you, and remembers you anyway."
+        },
         {
           "id": "revisit-anomaly",
           "priority": 90,
@@ -203,6 +220,12 @@
           "priority": 40,
           "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
           "text": "After the Null, the crystal's certainty unsettles you. It speaks as if silence were not always waiting on the other side of every word."
+        },
+        {
+          "id": "crystal-fresh-silence",
+          "priority": 45,
+          "condition": "{\"kind\":\"withinNSteps\",\"node\":\"silenceSource\",\"steps\":2}",
+          "text": "The Null is still cold on you — you stepped out of it only a breath ago, and the crystal's song keeps catching on the silence you carried back in."
         }
       ],
       "visualProperties": {
@@ -380,6 +403,12 @@
           "priority": 50,
           "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
           "text": "The echoes you carried in arrive, repeat once, and find no wall to answer them. They stop. It is almost a kindness."
+        },
+        {
+          "id": "null-recent-voice",
+          "priority": 45,
+          "condition": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"withinNSteps\",\"node\":\"whisperSource\",\"steps\":2},{\"kind\":\"withinNSteps\",\"node\":\"echoChamber\",\"steps\":2}]}",
+          "text": "A sound came down with you just now — a word, or its echo, caught in your wake. The Null takes it without a ripple, and the quiet afterward is a fraction deeper than before."
         }
       ],
       "visualProperties": {
@@ -497,6 +526,20 @@
       "textVariants": [],
       "visualProperties": {
         "color": "#f5f5dc",
+        "size": 16
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "persistence",
+      "label": "The Persistence",
+      "text": "You went down in this order: the voice first, then the silence that swallowed it, and last the echo the silence let back through. The word fell into the Null and did not return. The echo did. What stands here now is not the self that spoke — it is the repetition the silence kept, reissued faithfully and unable to tell that it is a copy. This is the eternal return of the digital self: not the same self twice, but its echo, returned in its place.",
+      "choices": [],
+      "textVariants": [],
+      "visualProperties": {
+        "color": "#3f6b5f",
         "size": 16
       },
       "metadata": {
@@ -692,6 +735,13 @@
       "target": "emergence",
       "visualProperties": {
         "color": "#eeeeee"
+      }
+    },
+    {
+      "source": "start",
+      "target": "persistence",
+      "visualProperties": {
+        "color": "#3f6b5f"
       }
     }
   ]

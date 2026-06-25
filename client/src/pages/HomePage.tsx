@@ -5,11 +5,13 @@ import { useStory } from '../context/context';
 import NodeMap from '../components/NodeMap';
 import { NodeData } from '../components/NodeMap';
 import SaveLoadControls from '../services/SaveLoadControls';
+import storyLogicService from '../services/StoryLogicService';
+import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
 import { useRef, useState, useEffect } from 'react';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { visitNode, getVisibleNodes, getVisibleLinks } = useStory();
+  const { state, visitNode, getVisibleNodes, getVisibleLinks } = useStory();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -19,6 +21,11 @@ const HomePage = () => {
     y: number
   } | null>(null);
 
+  // Order-legibility annotations (pure, from mapVisuals): the first-visit
+  // sequence number per node and the directed edges actually walked.
+  const visitOrder = getVisitOrder(state.history);
+  const trailKeys = getTrailLinkKeys(state.history, state.links);
+
   // Convert story nodes to D3 node format
   const d3Nodes = getVisibleNodes().map(node => ({
   id: node.id,
@@ -27,32 +34,35 @@ const HomePage = () => {
   y: node.y,
   color: node.color || 'steelblue', // Default color
   size: node.size || 25, // Default size
-  visitedCount: node.visitedCount || 0
+  visitedCount: node.visitedCount || 0,
+  visitOrder: visitOrder[node.id], // 1-based first-visit order, if visited
+  isCurrent: node.id === state.currentNodeId,
+  isEnding: storyLogicService.isEnding(node.id)
 }));
 
 const d3Links = getVisibleLinks().map(link => ({
   source: link.source,
   target: link.target,
   color: link.color || '#888', // Default color
-  width: link.width || 2 // Default width
+  width: link.width || 2, // Default width
+  onTrail: trailKeys.has(`${link.source}->${link.target}`) // walked edge → highlight
 }));
 
 // Add debug to check if we're getting data
 
-  // Update dimensions when component mounts or window resizes
+  // Measure the actual map container (not the whole page) and feed its real
+  // pixel size to NodeMap. The SVG fills this box via width/height:100%, so the
+  // size we pass must equal the rendered size or D3's centering math (forceCenter,
+  // zoomToFit) is computed against the wrong dimensions and the map sits
+  // off-centre. A ResizeObserver keeps it correct across layout/resize.
   useEffect(() => {
-    function updateSize() {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    }
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    const el = mapContainerRef.current;
+    if (!el) return;
+    const measure = () => setDimensions({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // Ensure nodes are positioned correctly when returning from narrative page
@@ -130,8 +140,8 @@ const d3Links = getVisibleLinks().map(link => ({
             nodesData={d3Nodes}
             linksData={d3Links}
             onNodeClick={handleNodeClick}
-            width={Math.min(dimensions.width * 0.8, 800)} // Adjusted width calculation
-            height={Math.min(dimensions.height * 0.6, 500)} // Adjusted height calculation
+            width={dimensions.width} // Actual map-container pixel size
+            height={dimensions.height}
             highlightedNodeId={nodeTransition?.nodeId}
             zoomToNode={nodeTransition?.nodeId}
             enableZoomAnimation={!!nodeTransition}

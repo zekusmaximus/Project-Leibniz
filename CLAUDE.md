@@ -113,14 +113,14 @@ Client state lives in a **React Context + `useReducer`** store, not Redux.
 - `context/InitialState.ts` — the bundled offline-fallback story graph. It no
   longer hardcodes anything: it imports the canonical `data/storyGraph.json` and
   runs it through `storyMapper.buildStoryState`. **The graph content lives in
-  `client/src/data/storyGraph.json`** (14 nodes): three paths from `start` —
+  `client/src/data/storyGraph.json`** (15 nodes): three paths from `start` —
   whispers (`pathA`→`whisperSource`→`whisperDepths`), echoes
   (`pathB`→`echoChamber`→`echoDepths`), and silence (`pathC`→`silenceSource`, the
-  Null) — woven together by source↔source resonance shortcuts, plus five endings:
+  Null) — woven together by source↔source resonance shortcuts, plus six endings:
   `convergence` (both sources), `singularity` (secret order echo→whisper),
-  `chorus` (all three sources), and the two order-determined endings `descent`
-  (whisper→echo→silence) and `emergence` (silence→echo→whisper). See "The story
-  graph (single source of truth)" below.
+  `chorus` (all three sources), and the three order-determined endings `descent`
+  (whisper→echo→silence), `emergence` (silence→echo→whisper) and `persistence`
+  (whisper→silence→echo). See "The story graph (single source of truth)" below.
 - `data/storyGraph.json` — **the single source of truth for the story graph.**
   Server-DTO shape (conditions serialized as JSON strings), so the offline
   fallback (via `buildStoryState`) and the backend API path produce the identical
@@ -197,9 +197,11 @@ reintroduce parallel copies of the reducer or initial state.
   state)`. **All three are wired in:** `StoryProvider` runs `evaluateState` after
   every visit (on `history`/`visitCounts` change) to set the story flags
   (`bothPathsVisited`, `convergenceUnlocked`, `secretPathDiscovered`, …) and
-  reveal the endings; `NarrativePage` calls `getNodeText`. `getNodeText` returns
-  the node's base `text` with every matching `textVariant` appended (highest
-  priority first) — see "Text variants" below. Variant predicates are compiled
+  reveal the endings; `NarrativePage` calls `getNodeText` (to render the prose)
+  and `getMatchingVariants` (to power the "Why this text?" panel, which lists the
+  active adaptive fragments and a `describeCondition` reason each one fired).
+  `getNodeText` returns the node's base `text` with every matching `textVariant`
+  appended (highest priority first) — see "Text variants" below. Variant predicates are compiled
   from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache
   is cleared in `reset()` (call it on restart/reload — the singleton's mutable
   once-rule + cache state survives remounts). **Adding an ending touches three
@@ -211,15 +213,30 @@ reintroduce parallel copies of the reducer or initial state.
   link in the JSON. `endingsIntegration.test.ts` covers the order endings.
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
-  `(state) => boolean` predicates with `compileCondition`. Seven kinds: `flag`,
-  `visited`, `historyEndsWith`, `orderSeen`, `and`, `or`, `not`. The same
-  compiler runs in both paths, so a condition behaves identically whether the
-  graph came from the backend (parsed from the stored JSON string with
-  `parseConditionSpec`/`compileConditionFromString`) or the offline fallback
-  (compiled inline). Used by both `StoryChoice.condition` and `TextVariant`.
+  `(state) => boolean` predicates with `compileCondition`. Ten kinds: `flag`,
+  `visited`, `notVisited`, `visitedCountAcross` (compares the summed visit count
+  across several nodes), `withinNSteps` (a node was visited within the last N
+  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`,
+  `orderSeen`, `and`, `or`, `not`. The same compiler runs in both paths, so a
+  condition behaves identically whether the graph came from the backend (parsed
+  from the stored JSON string with `parseConditionSpec`/`compileConditionFromString`)
+  or the offline fallback (compiled inline). Used by both `StoryChoice.condition`
+  and `TextVariant`. `describeCondition(spec, resolveLabel?)` renders a spec as a
+  human-readable explanation (e.g. "you arrived here via the Echo Chamber → the
+  Source of Whispers") — used by the "Why this text?" affordance on `NarrativePage`.
 - `SaveLoadService.ts` — localStorage persistence (key `project-leibniz-save`).
 - `SaveLoadControls.tsx` — Save/Load/Reset UI. **Mounted on `HomePage`.** Save
   writes both localStorage and the backend (via `saveProgress`).
+- `mapVisuals.ts` — **pure** (no React/D3) derivations that make a playthrough's
+  ORDER legible on the map: `getVisitOrder(history)` (1-based first-visit number
+  per node), `getTrailLinkKeys(history, links)` (the directed `source->target`
+  edges actually walked, for the highlighted trail), and `getNodeRole(...)`
+  (current > ending > visited > unvisited emphasis). `HomePage` calls these to
+  annotate the D3 node/link data (`visitOrder`/`isCurrent`/`isEnding` on nodes,
+  `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap` (`NarrativePage`)
+  render them (badges/order numbers, gold trail + direction arrows on NodeMap,
+  role strokes). Covered by `mapVisuals.test.ts` plus the DOM tests
+  `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
 
 ### Backend integration (wired)
 On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
@@ -316,21 +333,49 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   non-component module (`StoryContextDefinition.ts` exports only the context) so
   `react-refresh/only-export-components` stays happy. Don't co-locate a component
   export with the context.
-- **Tests: Vitest on the client only.** `client/tests/*.test.ts` cover the pure
-  logic — `conditionDSL`, `StoryReducer`, `StoryLogicService` (variants + rule
-  engine), `storyMapper`, `graphIntegrity` (validates the canonical
-  `data/storyGraph.json`: no dangling choice targets/links, all conditions parse,
-  unique ids, every node reachable from `start`), and `endingsIntegration`
-  (drives playthroughs through the real reducer + rule engine and asserts the
-  order-based endings fire for the right visit orders). Run with `npm test` (config in
-  `client/vitest.config.ts`, `node` environment). Tests live outside `src/` so the
-  app build's `tsc` ignores them, but `eslint .` still lints them (keep them
-  warning-clean). The **server** has no tests — its `test` script deliberately
-  exits 1. When you change the story graph, run `npm test`: `graphIntegrity`
-  catches broken references and unreachable nodes.
+- **Tests: Vitest on the client only.** Mostly pure logic — `conditionDSL`,
+  `StoryReducer`, `StoryLogicService` (variants + rule engine), `storyMapper`,
+  `mapVisuals` (visit-order / trail / role derivation), `graphIntegrity`
+  (validates the canonical `data/storyGraph.json`: no dangling choice
+  targets/links, all conditions parse, unique ids, every node reachable from
+  `start`), and `endingsIntegration` (drives playthroughs through the real
+  reducer + rule engine and asserts the order-based endings fire for the right
+  visit orders). Default env is `node`. **DOM/component tests** (e.g.
+  `nodeMap.render.test.tsx`) opt into jsdom with a `// @vitest-environment jsdom`
+  docblock on the first line and use `@testing-library/react`; they assert the
+  synchronous render structure (data-join groups, badges, trail), NOT animated
+  end-states or settled simulation positions (those run on timers that don't
+  settle deterministically under jsdom). Test files match `tests/**/*.test.{ts,tsx}`
+  (config in `client/vitest.config.ts`, which loads `@vitejs/plugin-react`). Run
+  with `npm test`. Tests live outside `src/` so the app build's `tsc` ignores
+  them, but `eslint .` still lints them (keep them warning-clean). The **server**
+  has no tests — its `test` script deliberately exits 1. When you change the story
+  graph, run `npm test`: `graphIntegrity` catches broken references and
+  unreachable nodes.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
   `MiniMap.tsx` (`import * as d3`). `src/d3.d.ts` declares `module 'd3'` to keep
   the namespace import type-checking.
+- **NodeMap is a persistent-simulation component.** It builds the SVG/defs/zoom/
+  simulation ONCE (a mount-only "scaffold" effect) and then does incremental
+  enter/update/exit data joins on each data change — it does NOT tear down and
+  rebuild. Node objects are kept stable across renders in a `Map` ref (so layout
+  survives reveals), new nodes are seeded at a placed neighbour, and the
+  simulation is reheated ONLY when the node/edge set changes (a signature check)
+  — never on a pure position/presentation update, which is what prevents the
+  settle → `UPDATE_NODE_POSITIONS` → re-render → reheat loop. Once-attached
+  handlers (click/hover) read the latest props via refs so they never go stale.
+  `zoomToFit` reads the live position store, not the lagging `nodesData` prop.
+  **MiniMap, by contrast, still fully re-renders** (`selectAll('*').remove()`) —
+  it's small and cheap, so that's fine; its scale domains are finite-guarded so a
+  not-yet-positioned node can't produce NaN coordinates.
+- **Map centring depends on passing the REAL container size.** `HomePage`
+  measures the `.node-map-container` box with a `ResizeObserver` and passes its
+  actual `clientWidth/clientHeight` to `NodeMap` (the SVG fills that box via
+  `width/height:100%`), because `forceCenter`/`zoomToFit` centre against those
+  numbers — feed it the wrong size and the map sits off-centre. The zoom
+  transforms also account for scale: to land a point p at the viewport centre the
+  translate subtracts `scale*p` (not just `p`), and the initial transform scales
+  *about* the centre rather than translating by it.
 
 ## Security notes (please surface, don't propagate)
 
