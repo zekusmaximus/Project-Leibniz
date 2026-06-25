@@ -5,7 +5,6 @@ import { InitialState } from './InitialState';
 export const storyReducer = (state: StoryState, action: StoryAction): StoryState => {
   switch (action.type) {
     case 'VISIT_NODE': {
-      console.log('VISIT_NODE action dispatched:', action.nodeId);
       const nodeId = action.nodeId;
       const newVisitCount = (state.visitCounts[nodeId] || 0) + 1;
       
@@ -22,7 +21,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
           // Optionally adjust size
           size: Math.max((updatedNodes[nodeId].size || 15) * 0.95, 10)
         };
-        console.log(`Node ${nodeId} visited (count: ${newVisitCount})`);
       }
       
       // Get all choices from this node to possibly reveal connected nodes
@@ -33,13 +31,11 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
         // If this link connects the current node to a node in choices
         if (link.source === nodeId && 
             choices.some(choice => choice.targetId === link.target)) {
-          console.log(`Link from ${nodeId} to ${link.target} revealed`);
           return { ...link, isRevealed: true };
         }
         
         // Also reveal links where the current node is a target, if the source is revealed
         if (link.target === nodeId && state.nodes[link.source]?.isRevealed) {
-          console.log(`Link from ${link.source} to ${nodeId} revealed`);
           return { ...link, isRevealed: true };
         }
         
@@ -63,7 +59,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
     }
 
     case 'REVEAL_NODE': {
-      console.log('REVEAL_NODE action dispatched:', action);
       const { nodeId, nodeData } = action;
       const updatedNodes = { ...state.nodes };
       
@@ -74,7 +69,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
           ...nodeData,
           isRevealed: true
         };
-        console.log(`Node ${nodeId} updated to:`, updatedNodes[nodeId]);
       } else {
         // Create new node
         updatedNodes[nodeId] = {
@@ -87,7 +81,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
           visitedCount: 0,
           isRevealed: true
         };
-        console.log(`New node ${nodeId} created:`, updatedNodes[nodeId]);
       }
       
       // Also check if we can reveal any links that connect to or from this node
@@ -108,7 +101,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
     }
 
     case 'REVEAL_LINK': {
-      console.log('REVEAL_LINK action dispatched:', action);
       const newLink = action.link;
       
       // First, ensure both source and target nodes exist and are revealed
@@ -127,7 +119,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
           ...sourceNode,
           isRevealed: true
         };
-        console.log(`Node ${newLink.source} automatically revealed`);
       }
       
       if (!targetNode.isRevealed) {
@@ -135,7 +126,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
           ...targetNode,
           isRevealed: true
         };
-        console.log(`Node ${newLink.target} automatically revealed`);
       }
       
       // Check if the link already exists
@@ -148,14 +138,12 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
         // Update existing link
         updatedLinks = state.links.map(link => {
           if (link.source === newLink.source && link.target === newLink.target) {
-            console.log(`Link ${link.source} -> ${link.target} revealed`);
             return { ...link, isRevealed: true };
           }
           return link;
         });
       } else {
         // Add new link
-        console.log(`New link added: ${newLink.source} -> ${newLink.target}`);
         updatedLinks = [...state.links, { ...newLink, isRevealed: true }];
       }
       
@@ -167,7 +155,6 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
     }
 
     case 'SET_FLAG': {
-      console.log(`SET_FLAG: ${action.key} = ${action.value}`);
       return {
         ...state,
         flags: {
@@ -178,17 +165,14 @@ export const storyReducer = (state: StoryState, action: StoryAction): StoryState
     }
 
     case 'RESET_STORY': {
-      console.log('RESET_STORY action dispatched');
       return InitialState;
     }
 
     case 'LOAD_STORY': {
-      console.log('LOAD_STORY action dispatched');
       return action.state;
     }
 
     case 'UPDATE_NODE_POSITIONS': {
-      console.log('UPDATE_NODE_POSITIONS action dispatched');
       const updatedNodes = { ...state.nodes };
       action.nodes.forEach(nodeUpdate => {
         if (updatedNodes[nodeUpdate.id]) {

@@ -30,13 +30,11 @@ const NarrativePage = () => {
     if (currentNode) {
       // First, make sure current node is revealed
       if (!currentNode.isRevealed) {
-        console.log(`Revealing node ${nodeId} on page visit`);
         revealNode(nodeId, { ...currentNode, isRevealed: true });
       }
       
       // Then visit it to update count if not already visited
       if (!state.visitCounts[nodeId] || state.visitCounts[nodeId] === 0) {
-        console.log(`Marking node ${nodeId} as visited`);
         visitNode(nodeId);
       }
       
@@ -47,7 +45,6 @@ const NarrativePage = () => {
           if (targetNode) {
             // Reveal the target node
             if (!targetNode.isRevealed) {
-              console.log(`Revealing choice target node ${choice.targetId}`);
               revealNode(choice.targetId, { ...targetNode, isRevealed: true });
             }
             
@@ -58,7 +55,6 @@ const NarrativePage = () => {
             );
             
             if (linkToReveal && !linkToReveal.isRevealed) {
-              console.log(`Revealing link from ${nodeId} to ${choice.targetId}`);
               revealLink({
                 ...linkToReveal,
                 isRevealed: true
@@ -73,7 +69,6 @@ const NarrativePage = () => {
         if (link.target === nodeId && !link.isRevealed) {
           const sourceNode = state.nodes[link.source];
           if (sourceNode && sourceNode.isRevealed) {
-            console.log(`Revealing incoming link from ${link.source} to ${nodeId}`);
             revealLink({ ...link, isRevealed: true });
           }
         }
@@ -87,10 +82,13 @@ const NarrativePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId, state.nodes, state.links, visitNode, revealNode, revealLink]);
   
-  // Get current node text
-  const currentNodeText = nodeId 
-    ? storyLogicService.getNodeText(nodeId, state) 
+  // Get current node text. getNodeText joins the base text and each adaptive
+  // text variant with blank lines, so split on those to render real paragraphs
+  // (a single <p> would collapse the newlines into one run-on block).
+  const currentNodeText = nodeId
+    ? storyLogicService.getNodeText(nodeId, state)
     : "";
+  const paragraphs = currentNodeText.split(/\n{2,}/).filter((p) => p.trim().length > 0);
 
   // Convert story nodes to D3 node format for MiniMap
   const d3Nodes = getVisibleNodes().map(node => ({
@@ -110,10 +108,6 @@ const NarrativePage = () => {
     width: link.width
   }));
 
-  // For debugging
-  console.log(`NarrativePage rendering with ${d3Nodes.length} nodes and ${d3Links.length} links`);
-  console.log('Visible node IDs:', d3Nodes.map(n => n.id));
-  console.log('Visible link pairs:', d3Links.map(l => `${l.source}->${l.target}`));
 
   const handleMiniMapClick = (x: number, y: number) => {
     // Find the closest node to the clicked coordinates
@@ -133,7 +127,6 @@ const NarrativePage = () => {
     
     // Navigate to the selected node
     if (closestNode && closestNode.id) {
-      console.log(`MiniMap click navigating to node ${closestNode.id}`);
       navigate(`/narrative/${closestNode.id}`);
       visitNode(closestNode.id);
     }
@@ -176,7 +169,9 @@ const NarrativePage = () => {
         <h2>{getCurrentNode()?.label || ''}</h2>
         
         <div className="story-text-container">
-          <p>{currentNodeText}</p>
+          {paragraphs.map((para, i) => (
+            <p key={i}>{para}</p>
+          ))}
 
           {isEnding && (
             <div className="story-ending">
@@ -198,7 +193,6 @@ const NarrativePage = () => {
                       // First, make sure the target node is revealed
                       const targetNode = state.nodes[choice.targetId];
                       if (targetNode && !targetNode.isRevealed) {
-                        console.log(`Revealing target node ${choice.targetId} on choice click`);
                         revealNode(choice.targetId, {
                           ...targetNode,
                           isRevealed: true
@@ -211,7 +205,6 @@ const NarrativePage = () => {
                         l.target === choice.targetId
                       );
                       if (link && !link.isRevealed) {
-                        console.log(`Revealing link from ${nodeId} to ${choice.targetId} on choice click`);
                         revealLink({
                           ...link,
                           isRevealed: true

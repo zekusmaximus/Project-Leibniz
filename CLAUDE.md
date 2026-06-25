@@ -279,9 +279,11 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   `import * as d3` in `MiniMap.tsx` is effectively `any`). Type your d3 callback
   params explicitly (e.g. `(d: NodeData) => …`) rather than reaching for
   `@ts-ignore` — the recommended config bans `@ts-ignore`.
-- **Heavy `console.log` usage.** The reducer and pages log verbosely (debugging
-  aids left in). Match the surrounding style if extending, but consider not
-  adding more noise.
+- **Keep `console.log` out of the runtime paths.** The reducer/pages/NodeMap used
+  to log verbosely; those debug logs have been removed. Only genuine diagnostics
+  remain — `console.warn`/`console.error` for real error/fallback conditions
+  (e.g. `storyMapper` dropping an unparseable variant, the `StoryProvider` offline
+  fallback, save/load failures). Don't reintroduce informational `console.log`s.
 - **Fast Refresh / context files.** Keep React context objects in their own
   non-component module (`StoryContextDefinition.ts` exports only the context) so
   `react-refresh/only-export-components` stays happy. Don't co-locate a component
