@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   compileCondition,
+  describeCondition,
   isConditionSpec,
   parseConditionSpec,
   compileConditionFromString,
@@ -40,6 +41,48 @@ describe('compileCondition', () => {
       const exactlyOne = compileCondition({ kind: 'visited', node: 'x', op: '==', count: 1 });
       expect(exactlyOne(makeState({ visitCounts: { x: 1 } }))).toBe(true);
       expect(exactlyOne(makeState({ visitCounts: { x: 2 } }))).toBe(false);
+    });
+  });
+
+  describe('notVisited', () => {
+    const pred = compileCondition({ kind: 'notVisited', node: 'x' });
+    it('is true only when the node has never been visited', () => {
+      expect(pred(makeState())).toBe(true);
+      expect(pred(makeState({ visitCounts: { x: 0 } }))).toBe(true);
+      expect(pred(makeState({ visitCounts: { x: 1 } }))).toBe(false);
+    });
+  });
+
+  describe('visitedCountAcross', () => {
+    it('sums visit counts across the given nodes (default: at least once)', () => {
+      const pred = compileCondition({ kind: 'visitedCountAcross', nodes: ['a', 'b'] });
+      expect(pred(makeState())).toBe(false);
+      expect(pred(makeState({ visitCounts: { a: 1 } }))).toBe(true);
+      expect(pred(makeState({ visitCounts: { b: 3 } }))).toBe(true);
+    });
+
+    it('honours the comparison operator and count over the sum', () => {
+      const pred = compileCondition({
+        kind: 'visitedCountAcross',
+        nodes: ['a', 'b', 'c'],
+        op: '>=',
+        count: 4,
+      });
+      expect(pred(makeState({ visitCounts: { a: 1, b: 2 } }))).toBe(false);
+      expect(pred(makeState({ visitCounts: { a: 1, b: 2, c: 1 } }))).toBe(true);
+    });
+  });
+
+  describe('withinNSteps', () => {
+    const pred = compileCondition({ kind: 'withinNSteps', node: 'x', steps: 2 });
+    it('matches only when the node is within the last N history entries', () => {
+      expect(pred(makeState({ history: ['x', 'a', 'b'] }))).toBe(false);
+      expect(pred(makeState({ history: ['a', 'x', 'b'] }))).toBe(true);
+      expect(pred(makeState({ history: ['a', 'b', 'x'] }))).toBe(true);
+    });
+    it('is false for a non-positive step window (never matches the whole history)', () => {
+      const zero = compileCondition({ kind: 'withinNSteps', node: 'x', steps: 0 });
+      expect(zero(makeState({ history: ['x'] }))).toBe(false);
     });
   });
 
@@ -125,11 +168,62 @@ describe('isConditionSpec', () => {
     expect(isConditionSpec({ kind: 'and', clauses: [{ kind: 'flag', key: 'a' }] })).toBe(true);
   });
 
+  it('accepts the visit-count and recency kinds', () => {
+    expect(isConditionSpec({ kind: 'notVisited', node: 'x' })).toBe(true);
+    expect(isConditionSpec({ kind: 'visitedCountAcross', nodes: ['a', 'b'] })).toBe(true);
+    expect(isConditionSpec({ kind: 'withinNSteps', node: 'x', steps: 2 })).toBe(true);
+  });
+
   it('rejects malformed values', () => {
     expect(isConditionSpec(null)).toBe(false);
     expect(isConditionSpec({ kind: 'bogus' })).toBe(false);
     expect(isConditionSpec({ kind: 'flag' })).toBe(false);
     expect(isConditionSpec({ kind: 'and', clauses: [{ kind: 'nope' }] })).toBe(false);
+    expect(isConditionSpec({ kind: 'notVisited' })).toBe(false);
+    expect(isConditionSpec({ kind: 'visitedCountAcross', nodes: [1, 2] })).toBe(false);
+    expect(isConditionSpec({ kind: 'withinNSteps', node: 'x' })).toBe(false);
+  });
+});
+
+describe('describeCondition', () => {
+  it('renders each kind as a readable explanation', () => {
+    expect(describeCondition({ kind: 'flag', key: 'convergenceUnlocked' })).toContain(
+      'convergenceUnlocked'
+    );
+    expect(describeCondition({ kind: 'visited', node: 'echoChamber' })).toBe(
+      'you have visited echoChamber'
+    );
+    expect(
+      describeCondition({ kind: 'visited', node: 'echoChamber', op: '>=', count: 2 })
+    ).toBe('you have visited echoChamber at least 2 times');
+    expect(describeCondition({ kind: 'notVisited', node: 'silenceSource' })).toBe(
+      'you have not visited silenceSource'
+    );
+    expect(describeCondition({ kind: 'withinNSteps', node: 'whisperSource', steps: 3 })).toBe(
+      'you visited whisperSource within the last 3 steps'
+    );
+    expect(
+      describeCondition({ kind: 'historyEndsWith', sequence: ['a', 'b'] })
+    ).toBe('you arrived here via a → b');
+    expect(
+      describeCondition({ kind: 'orderSeen', sequence: ['a', 'b'] })
+    ).toBe('you saw a → b in that order');
+  });
+
+  it('resolves node labels and composes boolean clauses', () => {
+    const label = (id: string) => (id === 'echoChamber' ? 'the Echo Chamber' : id);
+    expect(
+      describeCondition(
+        {
+          kind: 'and',
+          clauses: [
+            { kind: 'visited', node: 'echoChamber' },
+            { kind: 'not', clause: { kind: 'flag', key: 'done' } },
+          ],
+        },
+        label
+      )
+    ).toBe('you have visited the Echo Chamber and not (the “done” state is set)');
   });
 });
 

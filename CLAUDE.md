@@ -197,9 +197,11 @@ reintroduce parallel copies of the reducer or initial state.
   state)`. **All three are wired in:** `StoryProvider` runs `evaluateState` after
   every visit (on `history`/`visitCounts` change) to set the story flags
   (`bothPathsVisited`, `convergenceUnlocked`, `secretPathDiscovered`, …) and
-  reveal the endings; `NarrativePage` calls `getNodeText`. `getNodeText` returns
-  the node's base `text` with every matching `textVariant` appended (highest
-  priority first) — see "Text variants" below. Variant predicates are compiled
+  reveal the endings; `NarrativePage` calls `getNodeText` (to render the prose)
+  and `getMatchingVariants` (to power the "Why this text?" panel, which lists the
+  active adaptive fragments and a `describeCondition` reason each one fired).
+  `getNodeText` returns the node's base `text` with every matching `textVariant`
+  appended (highest priority first) — see "Text variants" below. Variant predicates are compiled
   from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache
   is cleared in `reset()` (call it on restart/reload — the singleton's mutable
   once-rule + cache state survives remounts). **Adding an ending touches three
@@ -211,12 +213,17 @@ reintroduce parallel copies of the reducer or initial state.
   link in the JSON. `endingsIntegration.test.ts` covers the order endings.
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
-  `(state) => boolean` predicates with `compileCondition`. Seven kinds: `flag`,
-  `visited`, `historyEndsWith`, `orderSeen`, `and`, `or`, `not`. The same
-  compiler runs in both paths, so a condition behaves identically whether the
-  graph came from the backend (parsed from the stored JSON string with
-  `parseConditionSpec`/`compileConditionFromString`) or the offline fallback
-  (compiled inline). Used by both `StoryChoice.condition` and `TextVariant`.
+  `(state) => boolean` predicates with `compileCondition`. Ten kinds: `flag`,
+  `visited`, `notVisited`, `visitedCountAcross` (compares the summed visit count
+  across several nodes), `withinNSteps` (a node was visited within the last N
+  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`,
+  `orderSeen`, `and`, `or`, `not`. The same compiler runs in both paths, so a
+  condition behaves identically whether the graph came from the backend (parsed
+  from the stored JSON string with `parseConditionSpec`/`compileConditionFromString`)
+  or the offline fallback (compiled inline). Used by both `StoryChoice.condition`
+  and `TextVariant`. `describeCondition(spec, resolveLabel?)` renders a spec as a
+  human-readable explanation (e.g. "you arrived here via the Echo Chamber → the
+  Source of Whispers") — used by the "Why this text?" affordance on `NarrativePage`.
 - `SaveLoadService.ts` — localStorage persistence (key `project-leibniz-save`).
 - `SaveLoadControls.tsx` — Save/Load/Reset UI. **Mounted on `HomePage`.** Save
   writes both localStorage and the backend (via `saveProgress`).
