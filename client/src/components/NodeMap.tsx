@@ -207,11 +207,14 @@ const NodeMap: React.FC<NodeMapProps> = ({
     if (bounds.x.min === Infinity || fitNodes.length <= 1) {
       const node = fitNodes[0];
       if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
-        const tx = width / 2 - (node.x as number);
-        const ty = height / 2 - (node.y as number);
+        // Centre the single node: screen = scale*p + translate, so to land p at
+        // (width/2, height/2) the translate must subtract scale*p (not just p).
+        const scale = 1.2;
+        const tx = width / 2 - scale * (node.x as number);
+        const ty = height / 2 - scale * (node.y as number);
         zoomRef.current.transform(
           svg.transition().duration(duration),
-          zoomIdentity.translate(tx, ty).scale(1.2)
+          zoomIdentity.translate(tx, ty).scale(scale)
         );
       }
       return;
@@ -305,7 +308,15 @@ const NodeMap: React.FC<NodeMapProps> = ({
     svg.call(zoomBehavior).on('wheel', (event: WheelEvent) => {
       if (event.ctrlKey || event.metaKey) event.preventDefault();
     });
-    zoomBehavior.transform(svg, zoomIdentity.translate(width / 2, height / 2).scale(0.8));
+    // Start slightly zoomed out but CENTRED: the simulation's forceCenter places
+    // nodes around (width/2, height/2) in user space, so scale about that point
+    // rather than translating by it (which would shove everything bottom-right
+    // until zoomToFit fires).
+    const initialScale = 0.8;
+    zoomBehavior.transform(
+      svg,
+      zoomIdentity.translate((width / 2) * (1 - initialScale), (height / 2) * (1 - initialScale)).scale(initialScale)
+    );
 
     const tooltip = g.append('g').attr('class', 'tooltip').style('opacity', 0).style('pointer-events', 'none');
     tooltip.append('rect').attr('x', -60).attr('y', -25).attr('width', 120).attr('height', 25)

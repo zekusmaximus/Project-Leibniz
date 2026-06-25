@@ -367,9 +367,15 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   `zoomToFit` reads the live position store, not the lagging `nodesData` prop.
   **MiniMap, by contrast, still fully re-renders** (`selectAll('*').remove()`) —
   it's small and cheap, so that's fine; its scale domains are finite-guarded so a
-  not-yet-positioned node can't produce NaN coordinates. Known pre-existing
-  cosmetic issue: the map can sit off-centre because the `<svg>` is `width:100%`
-  while the centring math uses the `width`/`height` props.
+  not-yet-positioned node can't produce NaN coordinates.
+- **Map centring depends on passing the REAL container size.** `HomePage`
+  measures the `.node-map-container` box with a `ResizeObserver` and passes its
+  actual `clientWidth/clientHeight` to `NodeMap` (the SVG fills that box via
+  `width/height:100%`), because `forceCenter`/`zoomToFit` centre against those
+  numbers — feed it the wrong size and the map sits off-centre. The zoom
+  transforms also account for scale: to land a point p at the viewport centre the
+  translate subtracts `scale*p` (not just `p`), and the initial transform scales
+  *about* the centre rather than translating by it.
 
 ## Security notes (please surface, don't propagate)
 

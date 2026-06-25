@@ -50,20 +50,19 @@ const d3Links = getVisibleLinks().map(link => ({
 
 // Add debug to check if we're getting data
 
-  // Update dimensions when component mounts or window resizes
+  // Measure the actual map container (not the whole page) and feed its real
+  // pixel size to NodeMap. The SVG fills this box via width/height:100%, so the
+  // size we pass must equal the rendered size or D3's centering math (forceCenter,
+  // zoomToFit) is computed against the wrong dimensions and the map sits
+  // off-centre. A ResizeObserver keeps it correct across layout/resize.
   useEffect(() => {
-    function updateSize() {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    }
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    const el = mapContainerRef.current;
+    if (!el) return;
+    const measure = () => setDimensions({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // Ensure nodes are positioned correctly when returning from narrative page
@@ -141,8 +140,8 @@ const d3Links = getVisibleLinks().map(link => ({
             nodesData={d3Nodes}
             linksData={d3Links}
             onNodeClick={handleNodeClick}
-            width={Math.min(dimensions.width * 0.8, 800)} // Adjusted width calculation
-            height={Math.min(dimensions.height * 0.6, 500)} // Adjusted height calculation
+            width={dimensions.width} // Actual map-container pixel size
+            height={dimensions.height}
             highlightedNodeId={nodeTransition?.nodeId}
             zoomToNode={nodeTransition?.nodeId}
             enableZoomAnimation={!!nodeTransition}
