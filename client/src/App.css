@@ -135,6 +135,46 @@
   opacity: 0.65;
 }
 
+/* Run-wide adaptation ledger: variants grouped by the node they belong to. */
+.ledger-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ledger-entry {
+  display: flex;
+  flex-direction: column;
+}
+
+.ledger-node {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ledger-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 204, 0, 0.15);
+  border: 1px solid #ffcc00;
+  color: #ffcc00;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: none;
+}
+
 /* For a better mobile experience */
 /* @media (max-width: 768px) {
   .story-text-container {

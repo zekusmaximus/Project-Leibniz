@@ -193,13 +193,17 @@ reintroduce parallel copies of the reducer or initial state.
   and `toProgressPayload` live here. **All shape-knowledge of the API lives in
   this file** — keep it there.
 - `StoryLogicService.ts` — a priority-ordered rule engine (`evaluateState`) plus
-  the text helpers `getNodeText(nodeId, state)` and `getMatchingVariants(nodeId,
-  state)`. **All three are wired in:** `StoryProvider` runs `evaluateState` after
-  every visit (on `history`/`visitCounts` change) to set the story flags
-  (`bothPathsVisited`, `convergenceUnlocked`, `secretPathDiscovered`, …) and
-  reveal the endings; `NarrativePage` calls `getNodeText` (to render the prose)
-  and `getMatchingVariants` (to power the "Why this text?" panel, which lists the
-  active adaptive fragments and a `describeCondition` reason each one fired).
+  the text helpers `getNodeText(nodeId, state)`, `getMatchingVariants(nodeId,
+  state)`, and `getAdaptationLedger(state)`. **All are wired in:** `StoryProvider`
+  runs `evaluateState` after every visit (on `history`/`visitCounts` change) to
+  set the story flags (`bothPathsVisited`, `convergenceUnlocked`,
+  `secretPathDiscovered`, …) and reveal the endings; `NarrativePage` calls
+  `getNodeText` (to render the prose), `getMatchingVariants` (to power the "Why
+  this text?" panel — the current node's active adaptive fragments, each with a
+  `describeCondition` reason), and `getAdaptationLedger` (the run-wide "How your
+  journey has adapted" panel: every currently-active variant across all visited
+  nodes, grouped by node in first-visit order, so the breadth of the
+  order-dependence is legible beyond the current node).
   `getNodeText` returns the node's base `text` with every matching `textVariant`
   appended (highest priority first) — see "Text variants" below. Variant predicates are compiled
   from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache

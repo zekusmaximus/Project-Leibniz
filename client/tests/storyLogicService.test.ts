@@ -52,6 +52,46 @@ describe('getNodeText', () => {
   });
 });
 
+describe('getAdaptationLedger', () => {
+  const v = (id: string, key: string): TextVariant => ({
+    id,
+    priority: 50,
+    text: `${id} text`,
+    condition: { kind: 'flag', key },
+  });
+
+  function ledgerState() {
+    return makeState({
+      nodes: {
+        a: makeNode({ id: 'a', label: 'Alpha', textVariants: [v('a1', 'on')] }),
+        b: makeNode({ id: 'b', label: 'Beta', textVariants: [v('b1', 'off')] }),
+        c: makeNode({ id: 'c', label: 'Gamma', textVariants: [v('c1', 'on'), v('c2', 'on')] }),
+      },
+      flags: { on: true, off: false },
+      // First-visit order: c (1), a (2); b never visited.
+      history: ['c', 'a', 'c'],
+    });
+  }
+
+  it('lists visited nodes with active variants, in first-visit order', () => {
+    const ledger = storyLogicService.getAdaptationLedger(ledgerState());
+    expect(ledger.map((e) => e.nodeId)).toEqual(['c', 'a']);
+    expect(ledger.map((e) => e.visitOrder)).toEqual([1, 2]);
+    expect(ledger[0].label).toBe('Gamma');
+    expect(ledger[0].variants.map((x) => x.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('omits visited nodes whose variants do not currently match', () => {
+    // b is never visited; even if it were, its only variant is off.
+    const ledger = storyLogicService.getAdaptationLedger(ledgerState());
+    expect(ledger.find((e) => e.nodeId === 'b')).toBeUndefined();
+  });
+
+  it('is empty when nothing has adapted', () => {
+    expect(storyLogicService.getAdaptationLedger(makeState())).toEqual([]);
+  });
+});
+
 describe('evaluateState (rule engine)', () => {
   it('flags both-paths and source reveals once each branch is entered', () => {
     const changes = storyLogicService.evaluateState(
