@@ -233,9 +233,10 @@ reintroduce parallel copies of the reducer or initial state.
   edges actually walked, for the highlighted trail), and `getNodeRole(...)`
   (current > ending > visited > unvisited emphasis). `HomePage` calls these to
   annotate the D3 node/link data (`visitOrder`/`isCurrent`/`isEnding` on nodes,
-  `onTrail` on links); `NodeMap` is the renderer (badges, gold direction arrows,
-  role strokes). Covered by `mapVisuals.test.ts`. **MiniMap does not yet show
-  this** — it's a separate D3 component on `NarrativePage`.
+  `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap` (`NarrativePage`)
+  render them (badges/order numbers, gold trail + direction arrows on NodeMap,
+  role strokes). Covered by `mapVisuals.test.ts` plus the DOM tests
+  `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
 
 ### Backend integration (wired)
 On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
@@ -354,6 +355,21 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
   `MiniMap.tsx` (`import * as d3`). `src/d3.d.ts` declares `module 'd3'` to keep
   the namespace import type-checking.
+- **NodeMap is a persistent-simulation component.** It builds the SVG/defs/zoom/
+  simulation ONCE (a mount-only "scaffold" effect) and then does incremental
+  enter/update/exit data joins on each data change — it does NOT tear down and
+  rebuild. Node objects are kept stable across renders in a `Map` ref (so layout
+  survives reveals), new nodes are seeded at a placed neighbour, and the
+  simulation is reheated ONLY when the node/edge set changes (a signature check)
+  — never on a pure position/presentation update, which is what prevents the
+  settle → `UPDATE_NODE_POSITIONS` → re-render → reheat loop. Once-attached
+  handlers (click/hover) read the latest props via refs so they never go stale.
+  `zoomToFit` reads the live position store, not the lagging `nodesData` prop.
+  **MiniMap, by contrast, still fully re-renders** (`selectAll('*').remove()`) —
+  it's small and cheap, so that's fine; its scale domains are finite-guarded so a
+  not-yet-positioned node can't produce NaN coordinates. Known pre-existing
+  cosmetic issue: the map can sit off-centre because the `<svg>` is `width:100%`
+  while the centring math uses the `width`/`height` props.
 
 ## Security notes (please surface, don't propagate)
 

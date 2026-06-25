@@ -5,6 +5,7 @@ import { useStory } from '../context/context';
 import MiniMap from '../components/MiniMap';
 import storyLogicService from '../services/StoryLogicService';
 import { describeCondition } from '../services/conditionDSL';
+import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
 import { useRef, useState, useEffect, useCallback } from 'react';
 
 const NarrativePage = () => {
@@ -99,6 +100,11 @@ const NarrativePage = () => {
   const resolveLabel = (id: string) => state.nodes[id]?.label ?? id;
   const snippet = (t: string) => (t.length > 70 ? t.slice(0, 67).trimEnd() + '…' : t);
 
+  // Order-legibility annotations (pure, from mapVisuals) — same as the main map,
+  // so the minimap shows the sequence walked and the trail too.
+  const visitOrder = getVisitOrder(state.history);
+  const trailKeys = getTrailLinkKeys(state.history, state.links);
+
   // Convert story nodes to D3 node format for MiniMap
   const d3Nodes = getVisibleNodes().map(node => ({
     id: node.id,
@@ -107,14 +113,16 @@ const NarrativePage = () => {
     y: node.y,
     color: node.color,
     size: node.size,
-    visitedCount: node.visitedCount
+    visitedCount: node.visitedCount,
+    visitOrder: visitOrder[node.id]
   }));
 
   const d3Links = getVisibleLinks().map(link => ({
     source: link.source,
     target: link.target,
     color: link.color,
-    width: link.width
+    width: link.width,
+    onTrail: trailKeys.has(`${link.source}->${link.target}`)
   }));
 
 

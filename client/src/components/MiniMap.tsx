@@ -18,11 +18,21 @@ interface ProcessedLink {
   source: NodeData | undefined;
   target: NodeData | undefined;
   color?: string;
+  onTrail?: boolean;
 }
 
 // d3 is loosely typed (see src/d3.d.ts), so we describe the scale functions we
 // pass around explicitly to keep the render callbacks type-safe.
 type ScaleFn = (value: number) => number;
+
+// Build a finite [min, max] from possibly-missing coordinates. Newly revealed
+// nodes may not have a position yet (they get one only after a settled main-map
+// layout), and feeding undefined into d3.extent yields a NaN domain — which
+// then paints every cx/cy/x1 as NaN. Falling back keeps the scales finite.
+function finiteExtent(values: (number | undefined)[], fallback: [number, number]): [number, number] {
+  const finite = values.filter((v): v is number => Number.isFinite(v));
+  return finite.length ? [Math.min(...finite), Math.max(...finite)] : fallback;
+}
 
 const MiniMap: React.FC<MiniMapProps> = ({
   nodesData,
@@ -62,11 +72,12 @@ const MiniMap: React.FC<MiniMapProps> = ({
       return {
         source: sourceNode,
         target: targetNode,
-        color: link.color
+        color: link.color,
+        onTrail: link.onTrail
       };
     }).filter(link => !!link.source && !!link.target);
 
-    // Draw links
+    // Draw links — walked edges (the trail) are drawn gold and a touch thicker.
     svg.selectAll('line')
       .data(processedLinks)
       .enter()
@@ -75,9 +86,9 @@ const MiniMap: React.FC<MiniMapProps> = ({
       .attr('y1', (d: ProcessedLink) => yScale(d.source?.y || 0))
       .attr('x2', (d: ProcessedLink) => xScale(d.target?.x || 0))
       .attr('y2', (d: ProcessedLink) => yScale(d.target?.y || 0))
-      .style('stroke', (d: ProcessedLink) => d.color || '#555')
-      .style('stroke-width', 1)
-      .style('stroke-opacity', 0.6);
+      .style('stroke', (d: ProcessedLink) => d.onTrail ? '#ffcc00' : (d.color || '#555'))
+      .style('stroke-width', (d: ProcessedLink) => d.onTrail ? 2 : 1)
+      .style('stroke-opacity', (d: ProcessedLink) => d.onTrail ? 0.9 : 0.6);
 
     // Draw nodes
     svg.selectAll('circle')
@@ -108,6 +119,22 @@ const MiniMap: React.FC<MiniMapProps> = ({
       .style('pointer-events', 'none')
       .text((d: NodeData) => d.label || d.id || '');
 
+    // Visit-order numbers (top-left of each visited node), mirroring the main
+    // map so the sequence the reader walked is legible here too.
+    svg.selectAll('text.mini-order')
+      .data(nodesData.filter((n: NodeData) => n.visitOrder !== undefined))
+      .enter()
+      .append('text')
+      .attr('class', 'mini-order')
+      .attr('x', (d: NodeData) => xScale(d.x || 0) - 5)
+      .attr('y', (d: NodeData) => yScale(d.y || 0) - 4)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '7px')
+      .style('font-weight', 'bold')
+      .style('fill', '#ffcc00')
+      .style('pointer-events', 'none')
+      .text((d: NodeData) => d.visitOrder?.toString() ?? '');
+
     // Draw current viewport indicator
     if (currentNodeId) {
       const currentNode = nodesData.find(n => n.id === currentNodeId);
@@ -130,8 +157,8 @@ const MiniMap: React.FC<MiniMapProps> = ({
     if (!svgRef.current || !nodesData.length) return;
 
     // Calculate bounds and render
-    const xExtent = d3.extent(nodesData, (d: NodeData) => d.x) as [number, number];
-    const yExtent = d3.extent(nodesData, (d: NodeData) => d.y) as [number, number];
+    const xExtent = finiteExtent(nodesData.map((d: NodeData) => d.x), [0, width]);
+    const yExtent = finiteExtent(nodesData.map((d: NodeData) => d.y), [0, height]);
 
     const padding = 20;
 
@@ -164,8 +191,8 @@ const MiniMap: React.FC<MiniMapProps> = ({
     if (!svgRef.current || !nodesData.length) return;
 
     // Calculate bounds and initial scales
-    const xExtent = d3.extent(nodesData, (d: NodeData) => d.x) as [number, number];
-    const yExtent = d3.extent(nodesData, (d: NodeData) => d.y) as [number, number];
+    const xExtent = finiteExtent(nodesData.map((d: NodeData) => d.x), [0, width]);
+    const yExtent = finiteExtent(nodesData.map((d: NodeData) => d.y), [0, height]);
 
     const padding = 15;
 
