@@ -40,8 +40,15 @@ export type ConditionSpec =
   | { kind: 'withinNSteps'; node: string; steps: number }
   // The visit history ends with this exact consecutive sequence (visit ORDER).
   | { kind: 'historyEndsWith'; sequence: string[] }
+  // The visit history *begins* with this exact consecutive sequence — how the
+  // run opened, which `historyEndsWith` (the tail) can't express.
+  | { kind: 'historyStartsWith'; sequence: string[] }
   // These nodes were visited in this relative order (not necessarily adjacent).
   | { kind: 'orderSeen'; sequence: string[] }
+  // `second` was visited in the step immediately after `first`, anywhere in
+  // history (adjacency). Unlike `orderSeen` (gaps allowed) or `historyEndsWith`
+  // (tail only), this catches a direct hop in the middle of a run.
+  | { kind: 'visitedImmediatelyAfter'; first: string; second: string }
   | { kind: 'and'; clauses: ConditionSpec[] }
   | { kind: 'or'; clauses: ConditionSpec[] }
   | { kind: 'not'; clause: ConditionSpec };
@@ -67,6 +74,18 @@ function endsWith(history: string[], sequence: string[]): boolean {
   if (sequence.length === 0 || sequence.length > history.length) return false;
   const tail = history.slice(-sequence.length);
   return sequence.every((id, i) => tail[i] === id);
+}
+
+function startsWith(history: string[], sequence: string[]): boolean {
+  if (sequence.length === 0 || sequence.length > history.length) return false;
+  return sequence.every((id, i) => history[i] === id);
+}
+
+function visitedImmediatelyAfter(history: string[], first: string, second: string): boolean {
+  for (let i = 1; i < history.length; i += 1) {
+    if (history[i] === second && history[i - 1] === first) return true;
+  }
+  return false;
 }
 
 function seenInOrder(history: string[], sequence: string[]): boolean {
@@ -103,8 +122,12 @@ export function compileCondition(spec: ConditionSpec): Predicate {
         spec.steps > 0 && state.history.slice(-spec.steps).includes(spec.node);
     case 'historyEndsWith':
       return (state) => endsWith(state.history, spec.sequence);
+    case 'historyStartsWith':
+      return (state) => startsWith(state.history, spec.sequence);
     case 'orderSeen':
       return (state) => seenInOrder(state.history, spec.sequence);
+    case 'visitedImmediatelyAfter':
+      return (state) => visitedImmediatelyAfter(state.history, spec.first, spec.second);
     case 'and': {
       const compiled = spec.clauses.map(compileCondition);
       return (state) => compiled.every((p) => p(state));
@@ -142,8 +165,11 @@ export function isConditionSpec(value: unknown): value is ConditionSpec {
     case 'withinNSteps':
       return typeof value.node === 'string' && typeof value.steps === 'number';
     case 'historyEndsWith':
+    case 'historyStartsWith':
     case 'orderSeen':
       return isStringArray(value.sequence);
+    case 'visitedImmediatelyAfter':
+      return typeof value.first === 'string' && typeof value.second === 'string';
     case 'and':
     case 'or':
       return Array.isArray(value.clauses) && value.clauses.every(isConditionSpec);
@@ -224,8 +250,12 @@ export function describeCondition(
       return `you visited ${resolveLabel(spec.node)} within the last ${spec.steps} steps`;
     case 'historyEndsWith':
       return `you arrived here via ${spec.sequence.map(resolveLabel).join(' → ')}`;
+    case 'historyStartsWith':
+      return `you began with ${spec.sequence.map(resolveLabel).join(' → ')}`;
     case 'orderSeen':
       return `you saw ${spec.sequence.map(resolveLabel).join(' → ')} in that order`;
+    case 'visitedImmediatelyAfter':
+      return `you went straight from ${resolveLabel(spec.first)} to ${resolveLabel(spec.second)}`;
     case 'and':
       return spec.clauses.map((c) => describeCondition(c, resolveLabel)).join(' and ');
     case 'or':

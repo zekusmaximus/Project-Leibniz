@@ -213,11 +213,15 @@ reintroduce parallel copies of the reducer or initial state.
   link in the JSON. `endingsIntegration.test.ts` covers the order endings.
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
-  `(state) => boolean` predicates with `compileCondition`. Ten kinds: `flag`,
+  `(state) => boolean` predicates with `compileCondition`. Twelve kinds: `flag`,
   `visited`, `notVisited`, `visitedCountAcross` (compares the summed visit count
   across several nodes), `withinNSteps` (a node was visited within the last N
-  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`,
-  `orderSeen`, `and`, `or`, `not`. The same compiler runs in both paths, so a
+  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`
+  (exact consecutive tail of history), `historyStartsWith` (exact consecutive
+  *head* — how the run opened), `orderSeen` (relative order, gaps allowed),
+  `visitedImmediatelyAfter` (a direct `first`→`second` hop anywhere in history —
+  adjacency, vs. `orderSeen`'s gaps and `historyEndsWith`'s tail-only),
+  `and`, `or`, `not`. The same compiler runs in both paths, so a
   condition behaves identically whether the graph came from the backend (parsed
   from the stored JSON string with `parseConditionSpec`/`compileConditionFromString`)
   or the offline fallback (compiled inline). Used by both `StoryChoice.condition`
