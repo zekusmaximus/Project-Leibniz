@@ -42,6 +42,66 @@ export function getTrailLinkKeys(history: string[], links: StoryLink[]): Set<str
   return trail;
 }
 
+/**
+ * A recency weight in [floor, 1] for every visited node, encoding *how long ago*
+ * you were last there — the node visited most recently gets 1, the
+ * least-recently-visited gets `floor`, and the rest fall linearly between. This
+ * is what lets the map fade a cooling trail behind the reader (memory decay),
+ * making the ORDER of a run legible as appearance, not just the badges. Distinct
+ * from `getVisitOrder`, which numbers FIRST visits and never decays. Nodes that
+ * were never visited are absent from the result.
+ */
+export function getVisitRecency(history: string[], floor = 0.4): Record<string, number> {
+  // Last-visit position per distinct node — a later index means more recent.
+  const lastSeen: Record<string, number> = {};
+  history.forEach((id, i) => {
+    lastSeen[id] = i;
+  });
+  const byRecency = Object.keys(lastSeen).sort((a, b) => lastSeen[b] - lastSeen[a]);
+  const denom = Math.max(1, byRecency.length - 1);
+  const recency: Record<string, number> = {};
+  byRecency.forEach((id, rank) => {
+    recency[id] = 1 - (rank / denom) * (1 - floor);
+  });
+  return recency;
+}
+
+/**
+ * All the order-legibility annotations for a single point in a playthrough —
+ * the run as it stood after its first `step` visits. Truncating history is what
+ * lets the map REPLAY a journey: at step k the trail, the visit-order badges and
+ * the recency fade all reflect only the first k visits, and `currentId` is the
+ * node the reader stood on then. Nodes visited later simply carry no annotation
+ * (they stay on the map, un-numbered and off-trail), so the path builds up as
+ * the step advances. `step` is clamped to `[0, history.length]`.
+ */
+export interface JourneyFrame {
+  visitOrder: Record<string, number>;
+  recency: Record<string, number>;
+  trailKeys: Set<string>;
+  currentId: string | undefined;
+  step: number;
+  total: number;
+}
+
+export function getJourneyFrame(
+  history: string[],
+  links: StoryLink[],
+  step: number
+): JourneyFrame {
+  const total = history.length;
+  const clamped = Math.max(0, Math.min(step, total));
+  const sliced = history.slice(0, clamped);
+  return {
+    visitOrder: getVisitOrder(sliced),
+    recency: getVisitRecency(sliced),
+    trailKeys: getTrailLinkKeys(sliced, links),
+    currentId: sliced[sliced.length - 1],
+    step: clamped,
+    total,
+  };
+}
+
 export type NodeRole = 'current' | 'ending' | 'visited' | 'unvisited';
 
 /**

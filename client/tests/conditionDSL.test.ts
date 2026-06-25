@@ -98,6 +98,19 @@ describe('compileCondition', () => {
     });
   });
 
+  describe('historyStartsWith', () => {
+    const pred = compileCondition({ kind: 'historyStartsWith', sequence: ['a', 'b'] });
+    it('matches only the exact consecutive head', () => {
+      expect(pred(makeState({ history: ['a', 'b', 'c'] }))).toBe(true);
+      expect(pred(makeState({ history: ['a', 'b'] }))).toBe(true);
+      expect(pred(makeState({ history: ['x', 'a', 'b'] }))).toBe(false);
+      expect(pred(makeState({ history: ['b', 'a', 'c'] }))).toBe(false);
+    });
+    it('is false when the sequence is longer than the history', () => {
+      expect(pred(makeState({ history: ['a'] }))).toBe(false);
+    });
+  });
+
   describe('orderSeen', () => {
     const pred = compileCondition({ kind: 'orderSeen', sequence: ['a', 'b'] });
     it('matches when the nodes appear in order, even non-adjacently', () => {
@@ -105,6 +118,20 @@ describe('compileCondition', () => {
       expect(pred(makeState({ history: ['a', 'b'] }))).toBe(true);
     });
     it('does not match the reverse order', () => {
+      expect(pred(makeState({ history: ['b', 'a'] }))).toBe(false);
+    });
+  });
+
+  describe('visitedImmediatelyAfter', () => {
+    const pred = compileCondition({ kind: 'visitedImmediatelyAfter', first: 'a', second: 'b' });
+    it('matches an adjacent a→b pair anywhere in history', () => {
+      expect(pred(makeState({ history: ['x', 'a', 'b', 'y'] }))).toBe(true);
+      expect(pred(makeState({ history: ['a', 'b'] }))).toBe(true);
+    });
+    it('does not match when a gap separates the pair', () => {
+      expect(pred(makeState({ history: ['a', 'x', 'b'] }))).toBe(false);
+    });
+    it('does not match the reverse adjacency', () => {
       expect(pred(makeState({ history: ['b', 'a'] }))).toBe(false);
     });
   });
@@ -174,6 +201,11 @@ describe('isConditionSpec', () => {
     expect(isConditionSpec({ kind: 'withinNSteps', node: 'x', steps: 2 })).toBe(true);
   });
 
+  it('accepts the order kinds', () => {
+    expect(isConditionSpec({ kind: 'historyStartsWith', sequence: ['a', 'b'] })).toBe(true);
+    expect(isConditionSpec({ kind: 'visitedImmediatelyAfter', first: 'a', second: 'b' })).toBe(true);
+  });
+
   it('rejects malformed values', () => {
     expect(isConditionSpec(null)).toBe(false);
     expect(isConditionSpec({ kind: 'bogus' })).toBe(false);
@@ -182,6 +214,8 @@ describe('isConditionSpec', () => {
     expect(isConditionSpec({ kind: 'notVisited' })).toBe(false);
     expect(isConditionSpec({ kind: 'visitedCountAcross', nodes: [1, 2] })).toBe(false);
     expect(isConditionSpec({ kind: 'withinNSteps', node: 'x' })).toBe(false);
+    expect(isConditionSpec({ kind: 'historyStartsWith', sequence: [1, 2] })).toBe(false);
+    expect(isConditionSpec({ kind: 'visitedImmediatelyAfter', first: 'a' })).toBe(false);
   });
 });
 
@@ -206,8 +240,14 @@ describe('describeCondition', () => {
       describeCondition({ kind: 'historyEndsWith', sequence: ['a', 'b'] })
     ).toBe('you arrived here via a → b');
     expect(
+      describeCondition({ kind: 'historyStartsWith', sequence: ['a', 'b'] })
+    ).toBe('you began with a → b');
+    expect(
       describeCondition({ kind: 'orderSeen', sequence: ['a', 'b'] })
     ).toBe('you saw a → b in that order');
+    expect(
+      describeCondition({ kind: 'visitedImmediatelyAfter', first: 'a', second: 'b' })
+    ).toBe('you went straight from a to b');
   });
 
   it('resolves node labels and composes boolean clauses', () => {

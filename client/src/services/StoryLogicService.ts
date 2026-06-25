@@ -1,6 +1,18 @@
 // client/src/services/StoryLogicService.ts
 import { StoryState, TextVariant } from '../context/StoryTypes';
 import { compileCondition } from './conditionDSL';
+import { getVisitOrder } from './mapVisuals';
+
+/**
+ * One node's worth of the run-wide adaptation ledger: the visited node, its
+ * first-visit order number, and the adaptive variants currently active there.
+ */
+export interface AdaptationLedgerEntry {
+  nodeId: string;
+  label: string;
+  visitOrder: number;
+  variants: TextVariant[];
+}
 
 type StoryTrigger = (state: StoryState) => boolean;
 type StoryEffect = (state: StoryState) => Partial<StoryState>;
@@ -259,6 +271,28 @@ class StoryLogicService {
         return predicate(state);
       })
       .sort((a, b) => b.priority - a.priority);
+  }
+
+  /**
+   * A run-wide view of every adaptive fragment currently active across the
+   * nodes the reader has visited — node by node, in first-visit order, each
+   * with its matching variants (highest priority first). This powers the
+   * NarrativePage adaptation ledger: it makes the BREADTH of the story's
+   * reaction (to which nodes were visited and in what order) legible beyond the
+   * current node alone. Nodes with no currently-matching variant are omitted, so
+   * an empty ledger means nothing has adapted yet.
+   */
+  getAdaptationLedger(state: StoryState): AdaptationLedgerEntry[] {
+    const order = getVisitOrder(state.history);
+    return Object.keys(order)
+      .map((nodeId) => ({
+        nodeId,
+        label: state.nodes[nodeId]?.label ?? nodeId,
+        visitOrder: order[nodeId],
+        variants: this.getMatchingVariants(nodeId, state),
+      }))
+      .filter((entry) => entry.variants.length > 0)
+      .sort((a, b) => a.visitOrder - b.visitOrder);
   }
 
   getNodeText(nodeId: string, state: StoryState): string {

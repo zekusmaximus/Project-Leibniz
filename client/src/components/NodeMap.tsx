@@ -22,6 +22,7 @@ export interface NodeData {
   visitedCount?: number;
   // Order-legibility annotations, derived in the pages via `mapVisuals`:
   visitOrder?: number; // 1-based position of this node's first visit, if visited
+  recency?: number; // [floor,1] decay weight: 1 = most-recently visited, fades older visits
   isCurrent?: boolean; // the node the reader is on now
   isEnding?: boolean; // a terminal ending node
   fx?: number | null;
@@ -102,6 +103,7 @@ function syncSimulationNodes(
       existing.size = incomingNode.size;
       existing.visitedCount = incomingNode.visitedCount;
       existing.visitOrder = incomingNode.visitOrder;
+      existing.recency = incomingNode.recency;
       existing.isCurrent = incomingNode.isCurrent;
       existing.isEnding = incomingNode.isEnding;
       existing.iconUrl = incomingNode.iconUrl;
@@ -183,6 +185,14 @@ const NodeMap: React.FC<NodeMapProps> = ({
       d.id === highlightRef.current || d.isCurrent || d.isEnding ? 2.5 : 1.5,
     []
   );
+  // Recency decay factor: the node you're on (or are zooming into) stays fully
+  // lit; visited nodes fade with their recency weight; unvisited nodes are
+  // unaffected (no weight → 1). Drives fill/halo opacity so a cooling trail is
+  // visible behind the reader.
+  const nodeRecency = useCallback((d: NodeData): number => {
+    if (d.id === highlightRef.current || d.isCurrent) return 1;
+    return d.recency ?? 1;
+  }, []);
 
   // Fit all visible nodes in view. Reads the persistent simulation store (the
   // live positions) rather than the nodesData prop, which lags by a render after
@@ -495,9 +505,12 @@ const NodeMap: React.FC<NodeMapProps> = ({
     nodeElementsRef.current = nodeSel;
 
     // Update the data-driven visuals on the full (enter + update) selection.
-    nodeSel.select<SVGCircleElement>('circle.glow-ring').style('filter', (d: NodeData) => nodeGlow(d));
+    nodeSel.select<SVGCircleElement>('circle.glow-ring')
+      .style('filter', (d: NodeData) => nodeGlow(d))
+      .style('opacity', (d: NodeData) => 0.7 * nodeRecency(d));
     nodeSel.select<SVGCircleElement>('circle.node-main-circle')
       .style('fill', (d: NodeData) => nodeFill(d))
+      .style('fill-opacity', (d: NodeData) => nodeRecency(d))
       .style('stroke', (d: NodeData) => nodeStroke(d))
       .style('stroke-width', (d: NodeData) => nodeStrokeWidth(d));
     nodeSel.select<SVGTextElement>('text.node-label')
@@ -591,7 +604,7 @@ const NodeMap: React.FC<NodeMapProps> = ({
     }
   }, [
     nodesData, linksData, width, height, highlightedNodeId, zoomToNode, enableZoomAnimation,
-    nodeFill, nodeGlow, nodeStroke, nodeStrokeWidth, animateNodeExpansion,
+    nodeFill, nodeGlow, nodeStroke, nodeStrokeWidth, nodeRecency, animateNodeExpansion,
   ]);
 
   return (

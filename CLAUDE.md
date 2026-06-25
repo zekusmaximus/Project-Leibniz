@@ -193,13 +193,17 @@ reintroduce parallel copies of the reducer or initial state.
   and `toProgressPayload` live here. **All shape-knowledge of the API lives in
   this file** — keep it there.
 - `StoryLogicService.ts` — a priority-ordered rule engine (`evaluateState`) plus
-  the text helpers `getNodeText(nodeId, state)` and `getMatchingVariants(nodeId,
-  state)`. **All three are wired in:** `StoryProvider` runs `evaluateState` after
-  every visit (on `history`/`visitCounts` change) to set the story flags
-  (`bothPathsVisited`, `convergenceUnlocked`, `secretPathDiscovered`, …) and
-  reveal the endings; `NarrativePage` calls `getNodeText` (to render the prose)
-  and `getMatchingVariants` (to power the "Why this text?" panel, which lists the
-  active adaptive fragments and a `describeCondition` reason each one fired).
+  the text helpers `getNodeText(nodeId, state)`, `getMatchingVariants(nodeId,
+  state)`, and `getAdaptationLedger(state)`. **All are wired in:** `StoryProvider`
+  runs `evaluateState` after every visit (on `history`/`visitCounts` change) to
+  set the story flags (`bothPathsVisited`, `convergenceUnlocked`,
+  `secretPathDiscovered`, …) and reveal the endings; `NarrativePage` calls
+  `getNodeText` (to render the prose), `getMatchingVariants` (to power the "Why
+  this text?" panel — the current node's active adaptive fragments, each with a
+  `describeCondition` reason), and `getAdaptationLedger` (the run-wide "How your
+  journey has adapted" panel: every currently-active variant across all visited
+  nodes, grouped by node in first-visit order, so the breadth of the
+  order-dependence is legible beyond the current node).
   `getNodeText` returns the node's base `text` with every matching `textVariant`
   appended (highest priority first) — see "Text variants" below. Variant predicates are compiled
   from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache
@@ -213,11 +217,15 @@ reintroduce parallel copies of the reducer or initial state.
   link in the JSON. `endingsIntegration.test.ts` covers the order endings.
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
-  `(state) => boolean` predicates with `compileCondition`. Ten kinds: `flag`,
+  `(state) => boolean` predicates with `compileCondition`. Twelve kinds: `flag`,
   `visited`, `notVisited`, `visitedCountAcross` (compares the summed visit count
   across several nodes), `withinNSteps` (a node was visited within the last N
-  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`,
-  `orderSeen`, `and`, `or`, `not`. The same compiler runs in both paths, so a
+  history entries — recency, vs. `visited` which is true forever), `historyEndsWith`
+  (exact consecutive tail of history), `historyStartsWith` (exact consecutive
+  *head* — how the run opened), `orderSeen` (relative order, gaps allowed),
+  `visitedImmediatelyAfter` (a direct `first`→`second` hop anywhere in history —
+  adjacency, vs. `orderSeen`'s gaps and `historyEndsWith`'s tail-only),
+  `and`, `or`, `not`. The same compiler runs in both paths, so a
   condition behaves identically whether the graph came from the backend (parsed
   from the stored JSON string with `parseConditionSpec`/`compileConditionFromString`)
   or the offline fallback (compiled inline). Used by both `StoryChoice.condition`
@@ -229,14 +237,23 @@ reintroduce parallel copies of the reducer or initial state.
   writes both localStorage and the backend (via `saveProgress`).
 - `mapVisuals.ts` — **pure** (no React/D3) derivations that make a playthrough's
   ORDER legible on the map: `getVisitOrder(history)` (1-based first-visit number
-  per node), `getTrailLinkKeys(history, links)` (the directed `source->target`
-  edges actually walked, for the highlighted trail), and `getNodeRole(...)`
-  (current > ending > visited > unvisited emphasis). `HomePage` calls these to
-  annotate the D3 node/link data (`visitOrder`/`isCurrent`/`isEnding` on nodes,
-  `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap` (`NarrativePage`)
-  render them (badges/order numbers, gold trail + direction arrows on NodeMap,
-  role strokes). Covered by `mapVisuals.test.ts` plus the DOM tests
-  `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
+  per node), `getVisitRecency(history, floor?)` (a `[floor,1]` decay weight per
+  visited node — most-recently-visited = 1, oldest = `floor` — so a *cooling
+  trail* fades behind the reader; ranks by LAST visit, so a revisit refreshes a
+  node), `getTrailLinkKeys(history, links)` (the directed `source->target`
+  edges actually walked, for the highlighted trail), `getNodeRole(...)`
+  (current > ending > visited > unvisited emphasis), and `getJourneyFrame(history,
+  links, step)` (bundles the above for the first `step` visits — `visitOrder`,
+  `recency`, `trailKeys` and the `currentId` at that step — so the map can REPLAY
+  a journey by truncating history; `HomePage`'s play/scrub controls drive `step`,
+  and because only annotations change (not node ids) NodeMap re-renders without
+  reheating the simulation). `HomePage` calls these to
+  annotate the D3 node/link data (`visitOrder`/`recency`/`isCurrent`/`isEnding`
+  on nodes, `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap`
+  (`NarrativePage`) render them (badges/order numbers, gold trail + direction
+  arrows on NodeMap, role strokes, and `recency` driving node fill/halo opacity —
+  the current node always stays fully lit). Covered by `mapVisuals.test.ts` plus
+  the DOM tests `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
 
 ### Backend integration (wired)
 On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
@@ -338,9 +355,11 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   `mapVisuals` (visit-order / trail / role derivation), `graphIntegrity`
   (validates the canonical `data/storyGraph.json`: no dangling choice
   targets/links, all conditions parse, unique ids, every node reachable from
-  `start`), and `endingsIntegration` (drives playthroughs through the real
+  `start`), `endingsIntegration` (drives playthroughs through the real
   reducer + rule engine and asserts the order-based endings fire for the right
-  visit orders). Default env is `node`. **DOM/component tests** (e.g.
+  visit orders), and `contentVariants` (same playthrough harness, asserts the
+  order-sensitive `textVariants` — opening moves, direct hops, deep revisits —
+  surface for the right order and stay hidden otherwise). Default env is `node`. **DOM/component tests** (e.g.
   `nodeMap.render.test.tsx`) opt into jsdom with a `// @vitest-environment jsdom`
   docblock on the first line and use `@testing-library/react`; they assert the
   synchronous render structure (data-join groups, badges, trail), NOT animated

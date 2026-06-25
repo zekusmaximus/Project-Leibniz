@@ -103,6 +103,9 @@ const MiniMap: React.FC<MiniMapProps> = ({
         if (d.visitedCount && d.visitedCount > 0) return d.color || '#6a0dad';
         return d.color || 'steelblue';
       })
+      // Fade older visits to mirror the main map's cooling trail; the current
+      // node stays fully lit, unvisited nodes (no recency) are unaffected.
+      .style('fill-opacity', (d: NodeData) => (d.id === currentNodeId ? 1 : d.recency ?? 1))
       .style('stroke', (d: NodeData) => d.id === currentNodeId ? '#fff' : 'none')
       .style('stroke-width', 1);
 

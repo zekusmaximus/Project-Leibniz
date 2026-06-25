@@ -5,7 +5,7 @@ import { useStory } from '../context/context';
 import MiniMap from '../components/MiniMap';
 import storyLogicService from '../services/StoryLogicService';
 import { describeCondition } from '../services/conditionDSL';
-import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
+import { getVisitOrder, getTrailLinkKeys, getVisitRecency } from '../services/mapVisuals';
 import { useRef, useState, useEffect, useCallback } from 'react';
 
 const NarrativePage = () => {
@@ -14,6 +14,7 @@ const NarrativePage = () => {
   const { state, visitNode, revealNode, revealLink, getVisibleNodes, getVisibleLinks, getCurrentNode, resetStory } = useStory();
   const [backgroundColor, setBackgroundColor] = useState('#1e232d');
   const [showAdaptations, setShowAdaptations] = useState(false);
+  const [showLedger, setShowLedger] = useState(false);
 
   // Add this ref for the mini map zoom function
   const miniMapZoomToFitRef = useRef<(() => void) | null>(null);
@@ -100,9 +101,17 @@ const NarrativePage = () => {
   const resolveLabel = (id: string) => state.nodes[id]?.label ?? id;
   const snippet = (t: string) => (t.length > 70 ? t.slice(0, 67).trimEnd() + '…' : t);
 
+  // Run-wide adaptation ledger: every adaptive fragment currently active across
+  // ALL the places the reader has been, in the order they first saw them. This
+  // makes the breadth of the story's order-dependence legible — not just how the
+  // current node reads, but how the whole journey has adapted.
+  const ledger = storyLogicService.getAdaptationLedger(state);
+  const ledgerTotal = ledger.reduce((sum, entry) => sum + entry.variants.length, 0);
+
   // Order-legibility annotations (pure, from mapVisuals) — same as the main map,
   // so the minimap shows the sequence walked and the trail too.
   const visitOrder = getVisitOrder(state.history);
+  const recency = getVisitRecency(state.history);
   const trailKeys = getTrailLinkKeys(state.history, state.links);
 
   // Convert story nodes to D3 node format for MiniMap
@@ -114,7 +123,8 @@ const NarrativePage = () => {
     color: node.color,
     size: node.size,
     visitedCount: node.visitedCount,
-    visitOrder: visitOrder[node.id]
+    visitOrder: visitOrder[node.id],
+    recency: recency[node.id]
   }));
 
   const d3Links = getVisibleLinks().map(link => ({
@@ -212,6 +222,42 @@ const NarrativePage = () => {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          )}
+
+          {ledgerTotal > 0 && (
+            <div className="adaptations ledger">
+              <button
+                type="button"
+                className="adaptations-toggle"
+                aria-expanded={showLedger}
+                onClick={() => setShowLedger((v) => !v)}
+              >
+                {showLedger ? 'Hide journey' : 'How your journey has adapted'} ({ledgerTotal})
+              </button>
+
+              {showLedger && (
+                <div className="ledger-list">
+                  {ledger.map((entry) => (
+                    <div key={entry.nodeId} className="ledger-entry">
+                      <p className="ledger-node">
+                        <span className="ledger-order">{entry.visitOrder}</span>
+                        {entry.label}
+                      </p>
+                      <ul className="adaptations-list">
+                        {entry.variants.map((variant) => (
+                          <li key={variant.id} className="adaptation-item">
+                            <span className="adaptation-snippet">“{snippet(variant.text)}”</span>
+                            <span className="adaptation-reason">
+                              — because {describeCondition(variant.condition, resolveLabel)}.
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
