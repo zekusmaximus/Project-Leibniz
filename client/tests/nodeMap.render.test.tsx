@@ -74,6 +74,20 @@ describe('NodeMap rendering', () => {
     expect(orders.sort()).toEqual(['1', '2']);
   });
 
+  it('fades a node main-circle by its recency weight', () => {
+    const recencyNodes: NodeData[] = [
+      { id: 'stale', label: 'Stale', x: 100, y: 100, size: 15, visitedCount: 1, recency: 0.4 },
+      { id: 'fresh', label: 'Fresh', x: 200, y: 150, size: 15, visitedCount: 1, recency: 1 },
+    ];
+    const { container } = render(ui(recencyNodes));
+    const opacityFor = (label: string) =>
+      (groupForLabel(container, label)
+        ?.querySelector('circle.node-main-circle') as SVGCircleElement | null)
+        ?.style.fillOpacity;
+    expect(opacityFor('Stale')).toBe('0.4');
+    expect(opacityFor('Fresh')).toBe('1');
+  });
+
   it('marks walked links as a directed trail', () => {
     const trailLinks: LinkData[] = [
       { source: 'start', target: 'pathA', onTrail: true },

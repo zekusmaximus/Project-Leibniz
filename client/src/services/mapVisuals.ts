@@ -42,6 +42,30 @@ export function getTrailLinkKeys(history: string[], links: StoryLink[]): Set<str
   return trail;
 }
 
+/**
+ * A recency weight in [floor, 1] for every visited node, encoding *how long ago*
+ * you were last there — the node visited most recently gets 1, the
+ * least-recently-visited gets `floor`, and the rest fall linearly between. This
+ * is what lets the map fade a cooling trail behind the reader (memory decay),
+ * making the ORDER of a run legible as appearance, not just the badges. Distinct
+ * from `getVisitOrder`, which numbers FIRST visits and never decays. Nodes that
+ * were never visited are absent from the result.
+ */
+export function getVisitRecency(history: string[], floor = 0.4): Record<string, number> {
+  // Last-visit position per distinct node — a later index means more recent.
+  const lastSeen: Record<string, number> = {};
+  history.forEach((id, i) => {
+    lastSeen[id] = i;
+  });
+  const byRecency = Object.keys(lastSeen).sort((a, b) => lastSeen[b] - lastSeen[a]);
+  const denom = Math.max(1, byRecency.length - 1);
+  const recency: Record<string, number> = {};
+  byRecency.forEach((id, rank) => {
+    recency[id] = 1 - (rank / denom) * (1 - floor);
+  });
+  return recency;
+}
+
 export type NodeRole = 'current' | 'ending' | 'visited' | 'unvisited';
 
 /**

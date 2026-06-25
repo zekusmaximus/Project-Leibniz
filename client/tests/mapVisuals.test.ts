@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { getVisitOrder, getTrailLinkKeys, getNodeRole } from '../src/services/mapVisuals';
+import {
+  getVisitOrder,
+  getVisitRecency,
+  getTrailLinkKeys,
+  getNodeRole,
+} from '../src/services/mapVisuals';
 import type { StoryLink } from '../src/context/StoryTypes';
 
 const link = (source: string, target: string): StoryLink => ({ source, target, isRevealed: true });
@@ -24,6 +29,31 @@ describe('getVisitOrder', () => {
 
   it('is empty for an empty history', () => {
     expect(getVisitOrder([])).toEqual({});
+  });
+});
+
+describe('getVisitRecency', () => {
+  it('weights the most-recent node 1 and the oldest at the floor', () => {
+    const r = getVisitRecency(['a', 'b', 'c'], 0.4);
+    expect(r.c).toBe(1); // most recent
+    expect(r.a).toBeCloseTo(0.4); // oldest → floor
+    expect(r.b).toBeCloseTo(0.7); // halfway between
+  });
+
+  it('ranks by LAST visit, so a revisit refreshes a node', () => {
+    // a is revisited last, so it is the most recent despite being seen first.
+    const r = getVisitRecency(['a', 'b', 'a'], 0.4);
+    expect(r.a).toBe(1);
+    expect(r.b).toBeCloseTo(0.4);
+  });
+
+  it('gives a lone visited node full weight', () => {
+    expect(getVisitRecency(['a'])).toEqual({ a: 1 });
+  });
+
+  it('omits never-visited nodes and is empty for empty history', () => {
+    expect(getVisitRecency([])).toEqual({});
+    expect(getVisitRecency(['a', 'b'])).not.toHaveProperty('c');
   });
 });
 

@@ -6,7 +6,7 @@ import NodeMap from '../components/NodeMap';
 import { NodeData } from '../components/NodeMap';
 import SaveLoadControls from '../services/SaveLoadControls';
 import storyLogicService from '../services/StoryLogicService';
-import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
+import { getVisitOrder, getTrailLinkKeys, getVisitRecency } from '../services/mapVisuals';
 import { useRef, useState, useEffect } from 'react';
 
 const HomePage = () => {
@@ -24,6 +24,7 @@ const HomePage = () => {
   // Order-legibility annotations (pure, from mapVisuals): the first-visit
   // sequence number per node and the directed edges actually walked.
   const visitOrder = getVisitOrder(state.history);
+  const recency = getVisitRecency(state.history);
   const trailKeys = getTrailLinkKeys(state.history, state.links);
 
   // Convert story nodes to D3 node format
@@ -36,6 +37,7 @@ const HomePage = () => {
   size: node.size || 25, // Default size
   visitedCount: node.visitedCount || 0,
   visitOrder: visitOrder[node.id], // 1-based first-visit order, if visited
+  recency: recency[node.id], // decay weight: recent visits stay lit, older fade
   isCurrent: node.id === state.currentNodeId,
   isEnding: storyLogicService.isEnding(node.id)
 }));

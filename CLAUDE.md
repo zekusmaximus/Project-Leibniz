@@ -233,14 +233,18 @@ reintroduce parallel copies of the reducer or initial state.
   writes both localStorage and the backend (via `saveProgress`).
 - `mapVisuals.ts` — **pure** (no React/D3) derivations that make a playthrough's
   ORDER legible on the map: `getVisitOrder(history)` (1-based first-visit number
-  per node), `getTrailLinkKeys(history, links)` (the directed `source->target`
+  per node), `getVisitRecency(history, floor?)` (a `[floor,1]` decay weight per
+  visited node — most-recently-visited = 1, oldest = `floor` — so a *cooling
+  trail* fades behind the reader; ranks by LAST visit, so a revisit refreshes a
+  node), `getTrailLinkKeys(history, links)` (the directed `source->target`
   edges actually walked, for the highlighted trail), and `getNodeRole(...)`
   (current > ending > visited > unvisited emphasis). `HomePage` calls these to
-  annotate the D3 node/link data (`visitOrder`/`isCurrent`/`isEnding` on nodes,
-  `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap` (`NarrativePage`)
-  render them (badges/order numbers, gold trail + direction arrows on NodeMap,
-  role strokes). Covered by `mapVisuals.test.ts` plus the DOM tests
-  `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
+  annotate the D3 node/link data (`visitOrder`/`recency`/`isCurrent`/`isEnding`
+  on nodes, `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap`
+  (`NarrativePage`) render them (badges/order numbers, gold trail + direction
+  arrows on NodeMap, role strokes, and `recency` driving node fill/halo opacity —
+  the current node always stays fully lit). Covered by `mapVisuals.test.ts` plus
+  the DOM tests `nodeMap.render.test.tsx` / `miniMap.render.test.tsx`.
 
 ### Backend integration (wired)
 On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
