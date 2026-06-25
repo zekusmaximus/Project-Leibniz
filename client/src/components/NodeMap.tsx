@@ -62,28 +62,6 @@ const NodeMap: React.FC<NodeMapProps> = ({
   enableZoomAnimation = false,
   onZoomToFitRef,
 }) => {
-  // Debug input data
-  console.log('NodeMap received:', {
-    nodesLength: nodesData.length,
-    linksLength: linksData.length,
-    width,
-    height
-  });
-
-  // Ensure each node has valid data
-  const validNodesData = nodesData.map(node => ({
-    ...node,
-    id: node.id,
-    x: node.x ?? Math.random() * width * 0.8 + width * 0.1,
-    y: node.y ?? Math.random() * height * 0.8 + height * 0.1,
-    size: node.size ?? 25,
-    color: node.color ?? 'steelblue',
-    visitedCount: node.visitedCount ?? 0
-  }));
-  
-  // Log the valid data
-  console.log('Processed nodes:', validNodesData.length);
-  
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<Simulation<NodeData, CustomSimulationLink> | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -218,11 +196,9 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     // Make sure we have valid data to render
     if (nodesData.length === 0) {
-      console.log('No nodes to display');
       return;
     }
     
-    console.log(`Rendering ${nodesData.length} nodes and ${linksData.length} links`);
 
     // Clear previous SVG content and refs
     const svgSelection = select(svgRef.current);
@@ -336,7 +312,6 @@ const NodeMap: React.FC<NodeMapProps> = ({
         target: typeof link.target === 'string' ? link.target : (link.target as NodeData).id
       }));
     
-    console.log(`Valid links after processing: ${processedLinks.length}`);
 
     // Prepare links for the simulation
     const linksForSimulation: LinkData[] = processedLinks
@@ -541,7 +516,6 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     // Call zoomToFit and save positions after the simulation has stabilized
     simulationInstance.on('end', () => {
-      console.log('Simulation ended. Saving node positions.');
       // Extract final positions
       const finalNodePositions = nodesData.map(node => ({
         id: node.id,

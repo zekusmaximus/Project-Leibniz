@@ -26,20 +26,22 @@ sub-projects:
 │   ├── vite.config.ts
 │   ├── eslint.config.js        # flat ESLint config (typescript-eslint)
 │   ├── tsconfig*.json
-│   └── src/
-│       ├── main.tsx            # React entry → renders <App/>
-│       ├── App.tsx            # BrowserRouter + routes, wraps app in <StoryProvider>
-│       ├── pages/
-│       │   ├── HomePage.tsx        # route "/"  — full node map, click a node to enter
-│       │   └── NarrativePage.tsx   # route "/narrative/:nodeId" — story text + minimap
-│       ├── components/
-│       │   ├── NodeMap.tsx         # large interactive D3 force-directed graph
-│       │   └── MiniMap.tsx         # small overview map shown on the narrative page
-│       ├── context/                # state management (see "State management" below)
-│       └── services/               # API client, persistence, story-logic helpers
+│   ├── src/
+│   │   ├── main.tsx            # React entry → renders <App/>
+│   │   ├── App.tsx             # BrowserRouter + routes, wraps app in <StoryProvider>
+│   │   ├── pages/
+│   │   │   ├── HomePage.tsx        # route "/"  — full node map, click a node to enter
+│   │   │   └── NarrativePage.tsx   # route "/narrative/:nodeId" — story text + minimap
+│   │   ├── components/
+│   │   │   ├── NodeMap.tsx         # large interactive D3 force-directed graph
+│   │   │   └── MiniMap.tsx         # small overview map shown on the narrative page
+│   │   ├── context/            # state management (see "State management" below)
+│   │   └── services/           # API client, persistence, story-logic helpers
+│   └── tests/                  # Vitest unit tests (run with `npm test`; see "Tests")
 ├── server/            # backend (own package.json, own package-lock.json)
 │   ├── index.js               # Express app entry, Mongo connection, route mounting
-│   ├── seed.js                # `npm run seed` — populates the DB with the starter graph
+│   ├── storyGraph.js          # starter graph DATA (pure, no deps) — shared by seed.js + tests
+│   ├── seed.js                # `npm run seed` — writes storyGraph.js to MongoDB (DESTRUCTIVE)
 │   ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
 │   ├── .env.example           # template to copy to .env
 │   ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
@@ -62,6 +64,8 @@ npm run dev        # Vite dev server, http://localhost:5173
 npm run build      # tsc (type-check) THEN vite build → client/dist  ✅ works
 npm run lint       # ESLint 9 flat config; --max-warnings 0  ✅ works (clean)
 npm run preview    # serve the production build locally
+npm test           # Vitest (run mode) — pure-logic unit tests in client/tests/  ✅ works
+npm run test:watch # Vitest in watch mode
 ```
 
 ### Backend (`server/`)
@@ -169,13 +173,16 @@ reintroduce parallel copies of the reducer or initial state.
   and `toProgressPayload` live here. **All shape-knowledge of the API lives in
   this file** — keep it there.
 - `StoryLogicService.ts` — a priority-ordered rule engine (`evaluateState`) plus
-  `getNodeText(nodeId, state)` and `getMatchingVariants(nodeId, state)`. Only the
-  text helpers are wired in (used by `NarrativePage`); `evaluateState`/the rule
-  list is defined but **not called**. `getNodeText` returns the node's base
-  `text` with every matching `textVariant` appended (highest priority first) —
-  see "Text variants" below. Variant predicates are compiled from the condition
-  DSL once and cached by `${nodeId}::${variantId}`; the cache is cleared in
-  `reset()`.
+  the text helpers `getNodeText(nodeId, state)` and `getMatchingVariants(nodeId,
+  state)`. **All three are wired in:** `StoryProvider` runs `evaluateState` after
+  every visit (on `history`/`visitCounts` change) to set the story flags
+  (`bothPathsVisited`, `convergenceUnlocked`, `secretPathDiscovered`, …) and
+  reveal the endings; `NarrativePage` calls `getNodeText`. `getNodeText` returns
+  the node's base `text` with every matching `textVariant` appended (highest
+  priority first) — see "Text variants" below. Variant predicates are compiled
+  from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache
+  is cleared in `reset()` (call it on restart/reload — the singleton's mutable
+  once-rule + cache state survives remounts).
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
   `(state) => boolean` predicates with `compileCondition`. Seven kinds: `flag`,
@@ -272,15 +279,24 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   `import * as d3` in `MiniMap.tsx` is effectively `any`). Type your d3 callback
   params explicitly (e.g. `(d: NodeData) => …`) rather than reaching for
   `@ts-ignore` — the recommended config bans `@ts-ignore`.
-- **Heavy `console.log` usage.** The reducer and pages log verbosely (debugging
-  aids left in). Match the surrounding style if extending, but consider not
-  adding more noise.
+- **Keep `console.log` out of the runtime paths.** The reducer/pages/NodeMap used
+  to log verbosely; those debug logs have been removed. Only genuine diagnostics
+  remain — `console.warn`/`console.error` for real error/fallback conditions
+  (e.g. `storyMapper` dropping an unparseable variant, the `StoryProvider` offline
+  fallback, save/load failures). Don't reintroduce informational `console.log`s.
 - **Fast Refresh / context files.** Keep React context objects in their own
   non-component module (`StoryContextDefinition.ts` exports only the context) so
   `react-refresh/only-export-components` stays happy. Don't co-locate a component
   export with the context.
-- **No tests exist** anywhere (client or server). There is no test runner
-  configured; the server `test` script deliberately exits 1.
+- **Tests: Vitest on the client only.** `client/tests/*.test.ts` cover the pure
+  logic — `conditionDSL`, `StoryReducer`, `StoryLogicService` (variants + rule
+  engine), `storyMapper`, and a `seedSync` **drift guard** that asserts
+  `server/storyGraph.js` and `InitialState.ts` describe the same graph. Run with
+  `npm test` (config in `client/vitest.config.ts`, `node` environment). Tests live
+  outside `src/` so the app build's `tsc` ignores them, but `eslint .` still lints
+  them (keep them warning-clean). The **server** has no tests — its `test` script
+  deliberately exits 1. When you change the story graph, run `npm test`: the drift
+  guard catches seed/InitialState divergence.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
   `MiniMap.tsx` (`import * as d3`). `src/d3.d.ts` declares `module 'd3'` to keep
   the namespace import type-checking.

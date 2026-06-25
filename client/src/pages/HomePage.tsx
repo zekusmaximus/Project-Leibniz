@@ -38,7 +38,6 @@ const d3Links = getVisibleLinks().map(link => ({
 }));
 
 // Add debug to check if we're getting data
-console.log(`HomePage has ${d3Nodes.length} nodes and ${d3Links.length} links to render`);
 
   // Update dimensions when component mounts or window resizes
   useEffect(() => {
