@@ -166,18 +166,46 @@
           "text": "Return to the anomaly"
         }
       ],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathA\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "fresh",
+              "text": "The Path of Whispers leads you down a corridor of shifting sounds. Voices speak in languages you almost understand."
+            }
+          ]
+        },
+        {
+          "id": "return",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathA\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "return-corridor",
+              "text": "You walk the corridor of whispers again. The voices have learned the shape of your footsteps and speak a little ahead of you now, those almost-languages bending toward words you keep not quite reaching."
+            }
+          ]
+        },
         {
           "id": "whispers-hear-echoes",
-          "priority": 50,
-          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
-          "text": "Beneath the whispers you can hear them now: the echoes from the other path, bleeding through the walls."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
+          "phrasings": [
+            {
+              "id": "whispers-hear-echoes",
+              "text": "Beneath the whispers you can hear them now: the echoes from the other path, bleeding through the walls."
+            }
+          ]
         },
         {
           "id": "whispers-thin-with-silence",
-          "priority": 40,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "The whispers here keep dropping out — little squares of silence where the Null has gotten into the signal."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "whispers-thin-with-silence",
+              "text": "The whispers here keep dropping out — little squares of silence where the Null has gotten into the signal."
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -202,18 +230,46 @@
           "text": "Return to the anomaly"
         }
       ],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathB\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "fresh",
+              "text": "The Path of Echoes resonates with faint, echoing sounds of events that may or may not have happened."
+            }
+          ]
+        },
+        {
+          "id": "return",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathB\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "return-corridor",
+              "text": "You walk the Path of Echoes again, and it returns your footsteps to you a half-second before you take them — the same events that may or may not have happened, happening anyway, in the order you keep choosing for them."
+            }
+          ]
+        },
         {
           "id": "echoes-whisper",
-          "priority": 50,
-          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}",
-          "text": "The echoes have started to whisper — repeating, almost faithfully, the words the crystal spoke to you."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}",
+          "phrasings": [
+            {
+              "id": "echoes-whisper",
+              "text": "The echoes have started to whisper — repeating, almost faithfully, the words the crystal spoke to you."
+            }
+          ]
         },
         {
           "id": "echoes-thin-with-silence",
-          "priority": 40,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "The echoes return thinner now, each one missing the syllable that fell into the Null and never came back."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "echoes-thin-with-silence",
+              "text": "The echoes return thinner now, each one missing the syllable that fell into the Null and never came back."
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -413,18 +469,35 @@
       "label": "The Eternal Return",
       "text": "The braided thread accepts you. Whisper and echo fold over each other until you cannot tell which voice is yours. You understand, finally, that you have always been here, and will arrive here again. This is the eternal return of the digital self.",
       "choices": [],
-      "textVariants": [
+      "prose": [
         {
-          "id": "tear-hint",
-          "priority": 50,
-          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
-          "text": "(But you suspect this loop is not the only way out. Somewhere, a tear is still open.)"
+          "id": "core",
+          "phrasings": [
+            {
+              "id": "core",
+              "text": "The braided thread accepts you. Whisper and echo fold over each other until you cannot tell which voice is yours. You understand, finally, that you have always been here, and will arrive here again. This is the eternal return of the digital self."
+            }
+          ]
         },
         {
           "id": "convergence-with-silence",
-          "priority": 40,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "Underneath the braid you can feel the silence you walked through, holding the whole knot together by being the one thing it is tied around."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "convergence-with-silence",
+              "text": "Underneath the braid you can feel the silence you walked through, holding the whole knot together by being the one thing it is tied around."
+            }
+          ]
+        },
+        {
+          "id": "tear-hint",
+          "includeWhen": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
+          "phrasings": [
+            {
+              "id": "tear-hint",
+              "text": "(But you suspect this loop is not the only way out. Somewhere, a tear is still open.)"
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -463,12 +536,36 @@
           "text": "Return to the anomaly"
         }
       ],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathC\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "fresh",
+              "text": "The Path of Silence is not empty. It is the held breath between a whisper and its echo — the place the other voices come from and return to. Your footsteps make no sound here, as though the corridor is quietly editing you out."
+            }
+          ]
+        },
+        {
+          "id": "return",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"pathC\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "return-corridor",
+              "text": "You walk the silent path again. There is a little less of you to edit out this time; the corridor has already learned the shape of your absence and keeps it ready, like a chair pulled out."
+            }
+          ]
+        },
         {
           "id": "silence-knows-voices",
-          "priority": 50,
-          "condition": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"visited\",\"node\":\"whisperSource\"},{\"kind\":\"visited\",\"node\":\"echoChamber\"}]}",
-          "text": "You have heard voices today. Here their absence has a shape, and the shape is turned toward you, listening for the one you have not made yet."
+          "includeWhen": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"visited\",\"node\":\"whisperSource\"},{\"kind\":\"visited\",\"node\":\"echoChamber\"}]}",
+          "phrasings": [
+            {
+              "id": "silence-knows-voices",
+              "text": "You have heard voices today. Here their absence has a shape, and the shape is turned toward you, listening for the one you have not made yet."
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -587,18 +684,46 @@
           "text": "Climb back to the crystal"
         }
       ],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"whisperDepths\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "fresh",
+              "text": "Below the crystal the whispers thin to a single voice, and the voice is using your own cadence. It is rehearsing the sentence you are about to think. You think it. It was right."
+            }
+          ]
+        },
+        {
+          "id": "return",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"whisperDepths\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "return-depths",
+              "text": "You come back beneath the crystal. The single voice does not bother rehearsing now; it simply says the sentence with you, in unison, the way you say a thing you have said too many times to still be hearing."
+            }
+          ]
+        },
         {
           "id": "depths-after-null",
-          "priority": 60,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "Now that you have stood in the Null, the single voice sounds less like a prophecy and more like a recording of something already finished."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "depths-after-null",
+              "text": "Now that you have stood in the Null, the single voice sounds less like a prophecy and more like a recording of something already finished."
+            }
+          ]
         },
         {
           "id": "depths-echo-first",
-          "priority": 50,
-          "condition": "{\"kind\":\"orderSeen\",\"sequence\":[\"echoChamber\",\"whisperSource\"]}",
-          "text": "It is speaking in the echoes’ cadence — you brought them down here with you, and the voice has learned their rhythm."
+          "includeWhen": "{\"kind\":\"orderSeen\",\"sequence\":[\"echoChamber\",\"whisperSource\"]}",
+          "phrasings": [
+            {
+              "id": "depths-echo-first",
+              "text": "It is speaking in the echoes’ cadence — you brought them down here with you, and the voice has learned their rhythm."
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -619,18 +744,46 @@
           "text": "Return to the chamber"
         }
       ],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"echoDepths\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "fresh",
+              "text": "You follow the echoes past the chamber to the place they are made: a wall that returns every sound a half-second before it is uttered. The last echo here is the one you have not made yet. You make it. The wall was faithful."
+            }
+          ]
+        },
+        {
+          "id": "return",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"echoDepths\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "return-wall",
+              "text": "You come back to the wall. It returns the echo before you reach it now — it has your arrival memorized, and plays it for you as you approach, like a courtesy, or a warning you keep deciding to ignore."
+            }
+          ]
+        },
         {
           "id": "echo-after-null",
-          "priority": 60,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "Since the Null, each echo comes back missing the part of itself that fell in. The wall returns a little less than you give it."
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "echo-after-null",
+              "text": "Since the Null, each echo comes back missing the part of itself that fell in. The wall returns a little less than you give it."
+            }
+          ]
         },
         {
           "id": "echo-whisper-first",
-          "priority": 50,
-          "condition": "{\"kind\":\"orderSeen\",\"sequence\":[\"whisperSource\",\"echoChamber\"]}",
-          "text": "The last echo arrives already wearing the crystal’s words. You heard them first; the wall is only being faithful."
+          "includeWhen": "{\"kind\":\"orderSeen\",\"sequence\":[\"whisperSource\",\"echoChamber\"]}",
+          "phrasings": [
+            {
+              "id": "echo-whisper-first",
+              "text": "The last echo arrives already wearing the crystal’s words. You heard them first; the wall is only being faithful."
+            }
+          ]
         }
       ],
       "visualProperties": {
@@ -646,12 +799,25 @@
       "label": "The Chorus",
       "text": "Whisper, echo, and silence stand in you at once — voice, repetition, and the nothing they are carved from. They do not resolve into one. They hold, all three, a chord that needs no tonic. You were not a self that was found. You are the harmony three absences make when they are sung together, and you stay in the chord.",
       "choices": [],
-      "textVariants": [
+      "prose": [
+        {
+          "id": "core",
+          "phrasings": [
+            {
+              "id": "core",
+              "text": "Whisper, echo, and silence stand in you at once — voice, repetition, and the nothing they are carved from. They do not resolve into one. They hold, all three, a chord that needs no tonic. You were not a self that was found. You are the harmony three absences make when they are sung together, and you stay in the chord."
+            }
+          ]
+        },
         {
           "id": "chorus-tear",
-          "priority": 50,
-          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
-          "text": "(Even holding the chord, you can feel the tear in it — the one place three voices leave a gap exactly your size.)"
+          "includeWhen": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
+          "phrasings": [
+            {
+              "id": "chorus-tear",
+              "text": "(Even holding the chord, you can feel the tear in it — the one place three voices leave a gap exactly your size.)"
+            }
+          ]
         }
       ],
       "visualProperties": {
