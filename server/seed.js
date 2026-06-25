@@ -8,9 +8,9 @@
 // Requires MONGODB_URI in server/.env. This is destructive: it clears the
 // StoryNode and StoryLink collections before inserting the starter graph.
 //
-// The graph data itself lives in ./storyGraph.js (pure data, no deps) so it can
-// be imported by tests without booting mongoose. Keep storyGraph.js in sync with
-// client/src/context/InitialState.ts — `client/tests/seedSync.test.ts` enforces it.
+// The graph data is the single source of truth in client/src/data/storyGraph.json;
+// ./storyGraph.js just re-exports it, so the seed and the client's offline
+// fallback can't drift. Edit the JSON, then re-seed.
 require('dotenv').config();
 const mongoose = require('mongoose');
 const StoryNode = require('./models/StoryNode');
