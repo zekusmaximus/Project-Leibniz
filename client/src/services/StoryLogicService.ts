@@ -1,6 +1,6 @@
 // client/src/services/StoryLogicService.ts
 import { StoryState, TextVariant } from '../context/StoryTypes';
-import { compileCondition } from './conditionDSL';
+import { compileCondition, ConditionSpec } from './conditionDSL';
 import { getVisitOrder } from './mapVisuals';
 
 /**
@@ -12,6 +12,22 @@ export interface AdaptationLedgerEntry {
   label: string;
   visitOrder: number;
   variants: TextVariant[];
+}
+
+/** One beat's resolution when rendering compositional prose. */
+export interface ChosenPhrasing {
+  beatId: string;
+  phrasingId?: string;
+  text: string;
+  priority: number;
+  // The `when` of the chosen phrasing, or undefined when the default fired.
+  condition?: ConditionSpec;
+}
+
+/** The result of rendering a node's `prose` beats for the current state. */
+export interface RenderedProse {
+  text: string;
+  chosen: ChosenPhrasing[];
 }
 
 type StoryTrigger = (state: StoryState) => boolean;
@@ -38,7 +54,7 @@ const ENDING_NODE_IDS = new Set<string>([
   'persistence',
 ]);
 
-class StoryLogicService {
+export class StoryLogicService {
   private rules: StoryRule[] = [];
 
   constructor() {
@@ -215,6 +231,7 @@ class StoryLogicService {
       rule.executed = false;
     });
     this.variantCache.clear();
+    this.proseCache.clear();
   }
 
   evaluateState(state: StoryState): Partial<StoryState> {
@@ -273,6 +290,86 @@ class StoryLogicService {
       .sort((a, b) => b.priority - a.priority);
   }
 
+  // Compiled-predicate cache for prose beats, keyed by a stable string so the
+  // condition is compiled once per (node, beat, slot). Cleared in reset().
+  private proseCache = new Map<string, (state: StoryState) => boolean>();
+
+  private getProsePredicate(cacheKey: string, spec: ConditionSpec): (state: StoryState) => boolean {
+    let predicate = this.proseCache.get(cacheKey);
+    if (!predicate) {
+      predicate = compileCondition(spec);
+      this.proseCache.set(cacheKey, predicate);
+    }
+    return predicate;
+  }
+
+  /**
+   * Render a node's compositional `prose` for the current state. Each beat
+   * resolves to AT MOST ONE phrasing — the highest-priority phrasing whose
+   * `when` matches, falling back to the conditionless default; ties break on
+   * author order. A beat whose `includeWhen` fails is omitted entirely, as is a
+   * beat where nothing is eligible. The chosen phrasings are woven into one
+   * continuous paragraph. Returns the woven text plus, per beat, which phrasing
+   * fired (so the UI can explain the morph). Nodes with no `prose` return empty.
+   */
+  renderProse(nodeId: string, state: StoryState): RenderedProse {
+    const node = state.nodes[nodeId];
+    if (!node?.prose?.length) return { text: '', chosen: [] };
+
+    const chosen: ChosenPhrasing[] = [];
+    for (const beat of node.prose) {
+      if (beat.includeWhen) {
+        const include = this.getProsePredicate(`${nodeId}::${beat.id}::inc`, beat.includeWhen);
+        if (!include(state)) continue;
+      }
+
+      let best: ChosenPhrasing | undefined;
+      beat.phrasings.forEach((phrasing, i) => {
+        const eligible =
+          phrasing.when === undefined ||
+          this.getProsePredicate(`${nodeId}::${beat.id}::p${i}`, phrasing.when)(state);
+        if (!eligible) return;
+        const priority = phrasing.priority ?? 0;
+        // Strictly higher priority wins; ties keep the earlier (author-order) one.
+        if (!best || priority > best.priority) {
+          best = {
+            beatId: beat.id,
+            phrasingId: phrasing.id,
+            text: phrasing.text,
+            priority,
+            condition: phrasing.when,
+          };
+        }
+      });
+
+      if (best) chosen.push(best);
+    }
+
+    const text = chosen
+      .map((c) => c.text.trim())
+      .filter((t) => t.length > 0)
+      .join(' ');
+    return { text, chosen };
+  }
+
+  /**
+   * The adaptive fragments currently active at a node, in a single shape the UI
+   * can explain via `describeCondition`. For a legacy node this is its matching
+   * `textVariants`; for a prose node it is the conditionally-chosen phrasings
+   * (the morphs) — beats that fell back to their default are omitted, since a
+   * default has no path-specific reason to surface. Used by the "Why this text?"
+   * panel and the run-wide adaptation ledger so BOTH prose models are legible.
+   */
+  getActiveAdaptations(nodeId: string, state: StoryState): TextVariant[] {
+    const node = state.nodes[nodeId];
+    if (node?.prose?.length) {
+      return this.renderProse(nodeId, state)
+        .chosen.filter((c): c is ChosenPhrasing & { condition: ConditionSpec } => c.condition !== undefined)
+        .map((c) => ({ id: c.phrasingId ?? c.beatId, text: c.text, priority: c.priority, condition: c.condition }));
+    }
+    return this.getMatchingVariants(nodeId, state);
+  }
+
   /**
    * A run-wide view of every adaptive fragment currently active across the
    * nodes the reader has visited — node by node, in first-visit order, each
@@ -289,7 +386,7 @@ class StoryLogicService {
         nodeId,
         label: state.nodes[nodeId]?.label ?? nodeId,
         visitOrder: order[nodeId],
-        variants: this.getMatchingVariants(nodeId, state),
+        variants: this.getActiveAdaptations(nodeId, state),
       }))
       .filter((entry) => entry.variants.length > 0)
       .sort((a, b) => a.visitOrder - b.visitOrder);
@@ -298,6 +395,14 @@ class StoryLogicService {
   getNodeText(nodeId: string, state: StoryState): string {
     const node = state.nodes[nodeId];
     if (!node) return '';
+
+    // Compositional prose (the beats model) takes precedence: the SENTENCE
+    // morphs by path rather than the base text getting a fragment appended. A
+    // node without `prose` falls back to the legacy text + appended variants
+    // path below, so migration to beats is incremental and per-node.
+    if (node.prose?.length) {
+      return this.renderProse(nodeId, state).text;
+    }
 
     let text = node.text;
 

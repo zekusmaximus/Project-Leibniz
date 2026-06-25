@@ -8,12 +8,44 @@ export interface TextVariant {
   condition: ConditionSpec;
 }
 
+// --- Compositional "morphing" prose (the beats model) ---------------------
+//
+// A node's prose can be authored as an ordered list of BEATS instead of (or as
+// well as) a flat `text` + appended `textVariants`. Each beat resolves to AT
+// MOST ONE phrasing — the highest-priority phrasing whose `when` matches, or the
+// conditionless default — and the chosen phrasings are woven into continuous
+// prose. This lets the SENTENCE itself morph by path/order, rather than only
+// appending a fragment. See services/StoryLogicService.renderProse.
+//
+// Conditions are authored in the canonical storyGraph.json as serialized
+// ConditionSpec strings (exactly like textVariants/choices) and parsed back into
+// ConditionSpec objects by storyMapper. A node with no `prose` falls back to the
+// legacy `text` + `textVariants` rendering, so migration is incremental.
+
+export interface ProsePhrasing {
+  // Optional stable id (handy for "why this text?" reasons and integrity checks).
+  id?: string;
+  // The prose for this phrasing. The highest-priority phrasing whose `when`
+  // matches wins; a phrasing with no `when` is the beat's default.
+  text: string;
+  priority?: number;
+  when?: ConditionSpec;
+}
+
+export interface ProseBeat {
+  id: string;
+  // When present and false for the current state, the whole beat is omitted.
+  includeWhen?: ConditionSpec;
+  phrasings: ProsePhrasing[];
+}
+
 export interface StoryNode {
   id: string;
   label: string;
   text: string;
   choices?: StoryChoice[];
   textVariants?: TextVariant[];
+  prose?: ProseBeat[];
   x?: number;
   y?: number;
   color?: string;

@@ -30,6 +30,12 @@ function play(sequence: string[]): StoryState {
 const variantIds = (nodeId: string, state: StoryState): string[] =>
   storyLogicService.getMatchingVariants(nodeId, state).map((v) => v.id);
 
+// For nodes authored in the compositional `prose` (beats) model, the unit that
+// fires is a chosen phrasing, not a textVariant. This returns the phrasing/beat
+// id chosen for each beat (defaults included, unlike getActiveAdaptations).
+const chosenIds = (nodeId: string, state: StoryState): string[] =>
+  storyLogicService.renderProse(nodeId, state).chosen.map((c) => c.phrasingId ?? c.beatId);
+
 describe('order-sensitive content variants fire through the real engine', () => {
   beforeEach(() => storyLogicService.reset());
 
@@ -60,16 +66,18 @@ describe('order-sensitive content variants fire through the real engine', () => 
   });
 
   describe('visitedImmediatelyAfter — a direct hop', () => {
-    it('fires the straight crossing into the crystal only when adjacent', () => {
-      const adjacent = variantIds(
+    // whisperSource is authored in the prose/beats model: the arrival beat MORPHS
+    // its sentence by route — a direct echo→whisper hop vs. a detour vs. fresh.
+    it('morphs the crystal arrival to the straight crossing only when adjacent', () => {
+      const adjacent = chosenIds(
         'whisperSource',
         play(['start', 'pathB', 'echoChamber', 'whisperSource'])
       );
       expect(adjacent).toContain('crossed-from-echoes');
 
       // Echoes seen, then a detour, THEN the crystal → not a direct hop. The
-      // weaker "heard-echoes" (ever visited) still fires; the adjacency one does not.
-      const detoured = variantIds(
+      // arrival morphs to the weaker "heard-echoes" phrasing, not the adjacency one.
+      const detoured = chosenIds(
         'whisperSource',
         play(['start', 'pathB', 'echoChamber', 'pathA', 'whisperSource'])
       );
@@ -101,12 +109,12 @@ describe('order-sensitive content variants fire through the real engine', () => 
   });
 
   describe('deep-revisit reincorporation', () => {
-    it('wears the crystal to glass only after the third visit', () => {
-      const twice = variantIds('whisperSource', play(['start', 'whisperSource', 'whisperSource']));
-      expect(twice).toContain('revisit-crystal'); // >= 2
+    it('wears the crystal to glass only after the third visit (prose beats)', () => {
+      const twice = chosenIds('whisperSource', play(['start', 'whisperSource', 'whisperSource']));
+      expect(twice).toContain('revisit-crystal'); // return-depth beat, >= 2
       expect(twice).not.toContain('crystal-worn'); // needs >= 3
 
-      const thrice = variantIds(
+      const thrice = chosenIds(
         'whisperSource',
         play(['start', 'whisperSource', 'whisperSource', 'whisperSource'])
       );

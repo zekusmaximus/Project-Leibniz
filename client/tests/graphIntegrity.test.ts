@@ -21,12 +21,24 @@ interface RawVariant {
   text: string;
   condition: string;
 }
+interface RawPhrasing {
+  id?: string;
+  text: string;
+  priority?: number;
+  when?: string;
+}
+interface RawBeat {
+  id: string;
+  includeWhen?: string;
+  phrasings: RawPhrasing[];
+}
 interface RawNode {
   id: string;
   label: string;
   text: string;
   choices?: RawChoice[];
   textVariants?: RawVariant[];
+  prose?: RawBeat[];
   visualProperties?: { color?: string; size?: number };
   metadata?: { isStartNode?: boolean };
 }
@@ -94,6 +106,41 @@ describe('story graph integrity', () => {
         expect(variant.id, `node ${node.id} variant id`).toBeTruthy();
         expect(variant.text, `node ${node.id} variant ${variant.id} text`).toBeTruthy();
         expect(typeof variant.priority, `node ${node.id} variant ${variant.id} priority`).toBe('number');
+      }
+    }
+  });
+
+  it('every prose beat is well-formed and its conditions parse', () => {
+    for (const node of graph.nodes) {
+      const beatIds = (node.prose ?? []).map((b) => b.id);
+      expect(new Set(beatIds).size, `node ${node.id} has duplicate beat ids`).toBe(beatIds.length);
+      for (const beat of node.prose ?? []) {
+        expect(beat.id, `node ${node.id} beat id`).toBeTruthy();
+        expect(
+          (beat.phrasings ?? []).length,
+          `node ${node.id} beat ${beat.id} has phrasings`
+        ).toBeGreaterThan(0);
+        if (beat.includeWhen !== undefined) {
+          expect(parseConditionSpec(beat.includeWhen), `${node.id}/${beat.id} includeWhen`).toBeDefined();
+        }
+        // A beat must be able to render SOMETHING: either a conditionless default
+        // phrasing, or an includeWhen that gates the whole (otherwise-conditional)
+        // beat. Otherwise it can silently vanish — almost always an authoring slip.
+        const hasDefault = beat.phrasings.some((p) => p.when === undefined);
+        expect(
+          hasDefault || beat.includeWhen !== undefined,
+          `${node.id}/${beat.id} can render nothing — add a default phrasing or an includeWhen`
+        ).toBe(true);
+        const phrasingIds = beat.phrasings.map((p) => p.id).filter((id): id is string => Boolean(id));
+        expect(new Set(phrasingIds).size, `${node.id}/${beat.id} duplicate phrasing ids`).toBe(
+          phrasingIds.length
+        );
+        for (const p of beat.phrasings) {
+          expect(p.text, `${node.id}/${beat.id} phrasing text`).toBeTruthy();
+          if (p.when !== undefined) {
+            expect(parseConditionSpec(p.when), `${node.id}/${beat.id} phrasing when`).toBeDefined();
+          }
+        }
       }
     }
   });

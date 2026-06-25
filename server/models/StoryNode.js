@@ -37,6 +37,19 @@ const StoryNodeSchema = new mongoose.Schema({
     priority: { type: Number, default: 0 },
     condition: { type: String, required: true }
   }],
+  // Compositional "morphing" prose (the beats model). Optional and additive: a
+  // node with `prose` renders it instead of `text` + `textVariants`. Conditions
+  // are stored as serialized ConditionSpec strings, exactly like textVariants.
+  prose: [{
+    id: { type: String, required: true },
+    includeWhen: { type: String, required: false },
+    phrasings: [{
+      id: { type: String, required: false },
+      text: { type: String, required: true },
+      priority: { type: Number, default: 0 },
+      when: { type: String, required: false }
+    }]
+  }],
   visualProperties: {
     x: Number,
     y: Number,

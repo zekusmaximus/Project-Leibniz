@@ -220,42 +220,60 @@
           "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}"
         }
       ],
-      "textVariants": [
+      "prose": [
         {
-          "id": "revisit-crystal",
-          "priority": 90,
-          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":2}",
-          "text": "You return to the crystal. It already knows you — it finishes the thoughts you came here to think."
+          "id": "arrival",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\"==\",\"count\":1}",
+          "phrasings": [
+            {
+              "id": "crossed-from-echoes",
+              "priority": 60,
+              "when": "{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"echoChamber\",\"second\":\"whisperSource\"}",
+              "text": "You cross straight from the chamber into the crystal's light, no corridor between — and it is still warm with echoes that have not had time to cool into whispers, speaking them back to you a half-breath before you can think them."
+            },
+            {
+              "id": "heard-echoes",
+              "priority": 40,
+              "when": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
+              "text": "You find the source of the whispers — a small, pulsating crystal whose song already carries the echoes you heard in the other chamber, as though the two places were always the same place."
+            },
+            {
+              "id": "fresh",
+              "text": "You find the source of the whispers — a small, pulsating crystal that speaks directly into your mind, in a voice that has never had to answer another."
+            }
+          ]
         },
         {
-          "id": "heard-echoes",
-          "priority": 50,
-          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
-          "text": "Its song now carries the echoes you heard in the other chamber, as though the two places were always the same place."
+          "id": "return-depth",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":2}",
+          "phrasings": [
+            {
+              "id": "crystal-worn",
+              "priority": 20,
+              "when": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":3}",
+              "text": "You have come back to the crystal so often that the path to it is worn to glass. It no longer finishes your thoughts; it thinks them first, and waits, a little wearily, for you to catch up to what you always say here."
+            },
+            {
+              "id": "revisit-crystal",
+              "text": "You return to the crystal. It already knows you — it finishes the thoughts you came here to think."
+            }
+          ]
         },
         {
-          "id": "crystal-after-silence",
-          "priority": 40,
-          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
-          "text": "After the Null, the crystal's certainty unsettles you. It speaks as if silence were not always waiting on the other side of every word."
-        },
-        {
-          "id": "crystal-fresh-silence",
-          "priority": 45,
-          "condition": "{\"kind\":\"withinNSteps\",\"node\":\"silenceSource\",\"steps\":2}",
-          "text": "The Null is still cold on you — you stepped out of it only a breath ago, and the crystal's song keeps catching on the silence you carried back in."
-        },
-        {
-          "id": "crossed-from-echoes",
-          "priority": 55,
-          "condition": "{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"echoChamber\",\"second\":\"whisperSource\"}",
-          "text": "You crossed straight here from the chamber, no corridor between — the resonance closed the gap in a single step. The crystal is still warm with echoes that have not yet had time to cool into whispers."
-        },
-        {
-          "id": "crystal-worn",
-          "priority": 95,
-          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":3}",
-          "text": "You have come back to the crystal so often that the path to it is worn to glass. It no longer finishes your thoughts; it thinks them first and waits, a little wearily, for you to catch up to what you always say here."
+          "id": "silence-mark",
+          "includeWhen": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "phrasings": [
+            {
+              "id": "crystal-fresh-silence",
+              "priority": 10,
+              "when": "{\"kind\":\"withinNSteps\",\"node\":\"silenceSource\",\"steps\":2}",
+              "text": "The Null is still cold on you — you stepped out of it only a breath ago, and the crystal's song keeps catching on the silence you carried back in, little squares of nothing where a word should be."
+            },
+            {
+              "id": "crystal-after-silence",
+              "text": "After the Null, the crystal's certainty unsettles you: it speaks as if silence were not always waiting on the other side of every word."
+            }
+          ]
         }
       ],
       "visualProperties": {

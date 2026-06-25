@@ -43,10 +43,33 @@ Three mechanisms work together:
    panel and a run-wide **"How your journey has adapted"** ledger that explain, in
    plain language, exactly which fragments fired and why.
 
-The engine already assembles the experienced prose per node
+The engine assembles the experienced prose per node
 ([`StoryLogicService.getNodeText`](./client/src/services/StoryLogicService.ts)) and
-records the full visit order in `state.history`. (A downloadable "assemble your own
-novel" export built on top of this is on the [roadmap](#roadmap).)
+records the full visit order in `state.history`.
+
+### Two ways a node's prose adapts
+
+- **Appended `textVariants`** (the original mechanism): the base `text` always
+  renders, and matching fragments are *appended* on top.
+- **Morphing `prose` beats** (the compositional model): a node is authored as an
+  ordered list of **beats**, each resolving to *one* path-conditioned phrasing (or
+  omitted), woven into continuous prose — so the *sentence itself* changes by route,
+  not just gets a fragment added. A node with `prose` renders it instead of
+  `text`/`textVariants`; nodes without it keep the legacy behavior, so migration is
+  incremental. `whisperSource` is authored in this model as the reference example.
+  See `ProseBeat`/`ProsePhrasing` in
+  [`StoryTypes.ts`](./client/src/context/StoryTypes.ts) and `renderProse` in
+  [`StoryLogicService.ts`](./client/src/services/StoryLogicService.ts).
+
+### Download your novel
+
+Because the engine can render a node's morphed prose for any path, your *novel* is
+just that rendering written down along your `history`.
+[`narrativeExport.ts`](./client/src/services/narrativeExport.ts) replays a run and
+captures each visited section as it read **at that step** (repeats kept), then
+serializes it to a Markdown book with front matter. The narrative page offers
+"Download your novel so far" / "Download your novel" (at endings). EPUB and an
+in-app reader are on the roadmap.
 
 ---
 
