@@ -35,13 +35,15 @@ sub-projects:
 │   │   ├── components/
 │   │   │   ├── NodeMap.tsx         # large interactive D3 force-directed graph
 │   │   │   └── MiniMap.tsx         # small overview map shown on the narrative page
+│   │   ├── data/
+│   │   │   └── storyGraph.json     # ⭐ SINGLE SOURCE OF TRUTH for the story graph
 │   │   ├── context/            # state management (see "State management" below)
 │   │   └── services/           # API client, persistence, story-logic helpers
 │   └── tests/                  # Vitest unit tests (run with `npm test`; see "Tests")
 ├── server/            # backend (own package.json, own package-lock.json)
 │   ├── index.js               # Express app entry, Mongo connection, route mounting
-│   ├── storyGraph.js          # starter graph DATA (pure, no deps) — shared by seed.js + tests
-│   ├── seed.js                # `npm run seed` — writes storyGraph.js to MongoDB (DESTRUCTIVE)
+│   ├── storyGraph.js          # re-exports client/src/data/storyGraph.json for the seed
+│   ├── seed.js                # `npm run seed` — writes the graph to MongoDB (DESTRUCTIVE)
 │   ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
 │   ├── .env.example           # template to copy to .env
 │   ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
@@ -105,9 +107,18 @@ Client state lives in a **React Context + `useReducer`** store, not Redux.
 - `context/StoryReducer.ts` — the live reducer (`storyReducer`). Handles
   `VISIT_NODE`, `REVEAL_NODE`, `REVEAL_LINK`, `SET_FLAG`, `RESET_STORY`,
   `LOAD_STORY`, `UPDATE_NODE_POSITIONS`.
-- `context/InitialState.ts` — the live initial story graph (5 nodes: `start`,
-  `pathA`, `pathB`, `whisperSource`, `echoChamber`). **This hardcoded data is
-  the actual story content the app loads** — see "Backend is not wired in" below.
+- `context/InitialState.ts` — the bundled offline-fallback story graph. It no
+  longer hardcodes anything: it imports the canonical `data/storyGraph.json` and
+  runs it through `storyMapper.buildStoryState`. **The graph content lives in
+  `client/src/data/storyGraph.json`** (7 nodes: `start`, `pathA`, `pathB`,
+  `whisperSource`, `echoChamber`, `convergence`, `singularity`) — see "The story
+  graph (single source of truth)" below.
+- `data/storyGraph.json` — **the single source of truth for the story graph.**
+  Server-DTO shape (conditions serialized as JSON strings), so the offline
+  fallback (via `buildStoryState`) and the backend API path produce the identical
+  client state. The server seed (`server/storyGraph.js`) re-exports this same
+  file. Edit the graph here and **nowhere else**; `npm test` validates its
+  integrity (`tests/graphIntegrity.test.ts`).
 - `context/StoryTypes.ts` — the canonical shared types (`StoryNode`,
   `StoryLink`, `StoryChoice`, `StoryState`, `StoryContextType`, `StoryAction`).
 - `context/StoryContextDefinition.ts` — `createContext` call.
@@ -154,11 +165,12 @@ reintroduce parallel copies of the reducer or initial state.
   appends every variant whose condition matches, sorted by `priority` descending.
   There is no per-node hardcoded text switch — all adaptive prose lives in the
   node data.
-- **Two stores, kept in sync:** `context/InitialState.ts` holds variants with
-  `ConditionSpec` **objects**; `server/seed.js` holds the same variants with the
-  condition `JSON.stringify`-ed. `storyMapper.mapServerNode` parses the server
-  strings back into specs (dropping any that won't parse). When you add or edit a
-  variant, update **both** files.
+- **One source, conditions as strings:** variants live in the canonical
+  `client/src/data/storyGraph.json` with their condition `JSON.stringify`-ed (the
+  same serialized shape the backend stores). `storyMapper.mapServerNode` parses
+  those strings back into `ConditionSpec` objects when building the client state
+  (dropping any that won't parse). Edit the variant in the JSON only — see
+  "The story graph (single source of truth)" below.
 
 ## Services layer (`client/src/services/`)
 
@@ -210,8 +222,9 @@ The context exposes two integration members beyond the helpers:
 `isLoading` (true during the initial fetch) and `saveProgress()`.
 
 **To get real data flowing:** start the server with a reachable `MONGODB_URI`,
-run `npm run seed` once to populate the graph, then run the client. `server/seed.js`
-mirrors `InitialState.ts`; keep the two in sync when you change the starter story.
+run `npm run seed` once to populate the graph, then run the client. The seed and
+the client's offline fallback both derive from the same `client/src/data/storyGraph.json`,
+so there is nothing to keep in sync — edit that one file and re-seed.
 
 ## Authoring nodes with AI (`tools/generate-node.js`)
 
@@ -235,9 +248,10 @@ node tools/generate-node.js "..." --dry-run        # print the assembled prompt 
   the script **validates** the returned JSON (DSL kinds, schema, choice↔link
   consistency, at-least-one-conditional) before emitting, and prints token usage
   plus a rough cost estimate on stderr (stdout stays clean JSON).
-- Output is ready to paste into `server/seed.js`. Remember to mirror it into
-  `client/src/context/InitialState.ts` (compile the condition strings back into
-  `ConditionSpec` objects there).
+- Output is in the canonical server-DTO shape (conditions as JSON strings), so it
+  drops straight into `client/src/data/storyGraph.json` — the single source. No
+  mirroring needed; the client derives `InitialState` and the server seeds from
+  that same file. Run `npm test` afterward to integrity-check the graph.
 
 ## Backend API reference
 
@@ -290,13 +304,14 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   export with the context.
 - **Tests: Vitest on the client only.** `client/tests/*.test.ts` cover the pure
   logic — `conditionDSL`, `StoryReducer`, `StoryLogicService` (variants + rule
-  engine), `storyMapper`, and a `seedSync` **drift guard** that asserts
-  `server/storyGraph.js` and `InitialState.ts` describe the same graph. Run with
-  `npm test` (config in `client/vitest.config.ts`, `node` environment). Tests live
-  outside `src/` so the app build's `tsc` ignores them, but `eslint .` still lints
-  them (keep them warning-clean). The **server** has no tests — its `test` script
-  deliberately exits 1. When you change the story graph, run `npm test`: the drift
-  guard catches seed/InitialState divergence.
+  engine), `storyMapper`, and `graphIntegrity` (validates the canonical
+  `data/storyGraph.json`: no dangling choice targets/links, all conditions parse,
+  unique ids, every node reachable from `start`). Run with `npm test` (config in
+  `client/vitest.config.ts`, `node` environment). Tests live outside `src/` so the
+  app build's `tsc` ignores them, but `eslint .` still lints them (keep them
+  warning-clean). The **server** has no tests — its `test` script deliberately
+  exits 1. When you change the story graph, run `npm test`: `graphIntegrity`
+  catches broken references and unreachable nodes.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
   `MiniMap.tsx` (`import * as d3`). `src/d3.d.ts` declares `module 'd3'` to keep
   the namespace import type-checking.
