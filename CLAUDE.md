@@ -37,14 +37,16 @@ sub-projects:
 │       │   └── MiniMap.tsx         # small overview map shown on the narrative page
 │       ├── context/                # state management (see "State management" below)
 │       └── services/               # API client, persistence, story-logic helpers
-└── server/            # backend (own package.json, own package-lock.json)
-    ├── index.js               # Express app entry, Mongo connection, route mounting
-    ├── seed.js                # `npm run seed` — populates the DB with the starter graph
-    ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
-    ├── .env.example           # template to copy to .env
-    ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
-    ├── models/                # Mongoose schemas: StoryNode, StoryLink, UserProgress
-    └── routes/api/            # REST routers: storyNodes, storyLinks, userProgress
+├── server/            # backend (own package.json, own package-lock.json)
+│   ├── index.js               # Express app entry, Mongo connection, route mounting
+│   ├── seed.js                # `npm run seed` — populates the DB with the starter graph
+│   ├── .env                   # git-ignored, untracked (you create it locally) — see "Security notes"
+│   ├── .env.example           # template to copy to .env
+│   ├── .gitignore             # ignores node_modules + .env (keeps .env.example)
+│   ├── models/                # Mongoose schemas: StoryNode, StoryLink, UserProgress
+│   └── routes/api/            # REST routers: storyNodes, storyLinks, userProgress
+└── tools/             # standalone dev scripts (no package.json; run with plain `node`)
+    └── generate-node.js       # AI co-authoring CLI — see "Authoring nodes with AI" below
 ```
 
 ## Running the project
@@ -132,9 +134,27 @@ reintroduce parallel copies of the reducer or initial state.
 - Visibility is derived: `getVisibleNodes()` = nodes with `isRevealed`;
   `getVisibleLinks()` = revealed links whose *both* endpoints are revealed.
 - `StoryChoice.condition` is a function `(state) => boolean` (filters which
-  choices render). Note this is a runtime function on the client, while the
-  server's `StoryNode` schema stores `condition` as a string — the two models
-  are **not** currently reconciled.
+  choices render). On the client it is a runtime predicate; the server's
+  `StoryNode` schema stores `condition` as a string. The two are reconciled by
+  `services/conditionDSL.ts`: conditions are authored as serializable
+  `ConditionSpec` objects, stored as `JSON.stringify(spec)` on the server, and
+  compiled back to predicates by `storyMapper`. The same mechanism backs
+  `textVariants` (see below).
+
+### Text variants
+- `StoryNode.textVariants?: TextVariant[]` — adaptive prose fragments that append
+  to a node's base `text` as the reader revisits nodes, sees them in a particular
+  order, or trips story flags. Each `TextVariant` is `{ id, text, priority,
+  condition }` where `condition` is a `ConditionSpec` (see `conditionDSL.ts`).
+- **Additive, not replacing:** the base `text` always renders; `getNodeText`
+  appends every variant whose condition matches, sorted by `priority` descending.
+  There is no per-node hardcoded text switch — all adaptive prose lives in the
+  node data.
+- **Two stores, kept in sync:** `context/InitialState.ts` holds variants with
+  `ConditionSpec` **objects**; `server/seed.js` holds the same variants with the
+  condition `JSON.stringify`-ed. `storyMapper.mapServerNode` parses the server
+  strings back into specs (dropping any that won't parse). When you add or edit a
+  variant, update **both** files.
 
 ## Services layer (`client/src/services/`)
 
@@ -149,8 +169,21 @@ reintroduce parallel copies of the reducer or initial state.
   and `toProgressPayload` live here. **All shape-knowledge of the API lives in
   this file** — keep it there.
 - `StoryLogicService.ts` — a priority-ordered rule engine (`evaluateState`) plus
-  `getNodeText(nodeId, state)`. Only `getNodeText` is wired in (used by
-  `NarrativePage`); `evaluateState`/the rule list is defined but **not called**.
+  `getNodeText(nodeId, state)` and `getMatchingVariants(nodeId, state)`. Only the
+  text helpers are wired in (used by `NarrativePage`); `evaluateState`/the rule
+  list is defined but **not called**. `getNodeText` returns the node's base
+  `text` with every matching `textVariant` appended (highest priority first) —
+  see "Text variants" below. Variant predicates are compiled from the condition
+  DSL once and cached by `${nodeId}::${variantId}`; the cache is cleared in
+  `reset()`.
+- `conditionDSL.ts` — a small **serializable** condition language. Conditions are
+  authored as plain-data `ConditionSpec` objects and compiled to
+  `(state) => boolean` predicates with `compileCondition`. Seven kinds: `flag`,
+  `visited`, `historyEndsWith`, `orderSeen`, `and`, `or`, `not`. The same
+  compiler runs in both paths, so a condition behaves identically whether the
+  graph came from the backend (parsed from the stored JSON string with
+  `parseConditionSpec`/`compileConditionFromString`) or the offline fallback
+  (compiled inline). Used by both `StoryChoice.condition` and `TextVariant`.
 - `SaveLoadService.ts` — localStorage persistence (key `project-leibniz-save`).
 - `SaveLoadControls.tsx` — Save/Load/Reset UI. **Mounted on `HomePage`.** Save
   writes both localStorage and the backend (via `saveProgress`).
@@ -172,6 +205,32 @@ The context exposes two integration members beyond the helpers:
 **To get real data flowing:** start the server with a reachable `MONGODB_URI`,
 run `npm run seed` once to populate the graph, then run the client. `server/seed.js`
 mirrors `InitialState.ts`; keep the two in sync when you change the starter story.
+
+## Authoring nodes with AI (`tools/generate-node.js`)
+
+A standalone, dependency-free Node CLI (uses the built-in global `fetch`; needs
+Node 18+) that asks an LLM to co-author a fully-formed story node — base `text`,
+conditional `textVariants`, `choices`, and `links` — in the exact shape
+`server/seed.js` expects (conditions serialized to JSON strings).
+
+```bash
+node tools/generate-node.js "A node where the reader meets their own echo"
+node tools/generate-node.js --concept brief.md --existing nodes.json --out new.json
+node tools/generate-node.js --batch concepts.jsonl --style-ref prose-sample.txt
+node tools/generate-node.js "..." --dry-run        # print the assembled prompt only
+```
+
+- **Provider:** Claude API by default (needs `ANTHROPIC_API_KEY`), with an OpenAI
+  fallback (`OPENAI_API_KEY`); auto-selects based on which key is present, or
+  force with `--provider`. Default model `claude-3-5-haiku-latest` (`--model` to
+  override).
+- The system prompt embeds the full Condition DSL reference and output schema;
+  the script **validates** the returned JSON (DSL kinds, schema, choice↔link
+  consistency, at-least-one-conditional) before emitting, and prints token usage
+  plus a rough cost estimate on stderr (stdout stays clean JSON).
+- Output is ready to paste into `server/seed.js`. Remember to mirror it into
+  `client/src/context/InitialState.ts` (compile the condition strings back into
+  `ConditionSpec` objects there).
 
 ## Backend API reference
 

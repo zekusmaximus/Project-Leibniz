@@ -6,8 +6,8 @@
 // The server nests presentation under `visualProperties` and authoring metadata
 // under `metadata`; the client keeps a flatter, render-friendly shape. Keep all
 // of that shape-knowledge here so the rest of the app never sees the raw API DTOs.
-import { StoryNode, StoryLink, StoryState, StoryChoice } from '../context/StoryTypes';
-import { compileConditionFromString } from './conditionDSL';
+import { StoryNode, StoryLink, StoryState, StoryChoice, TextVariant } from '../context/StoryTypes';
+import { compileConditionFromString, parseConditionSpec } from './conditionDSL';
 
 /** Node document as returned by `GET /api/nodes`. */
 export interface ServerNode {
@@ -15,6 +15,7 @@ export interface ServerNode {
   label: string;
   text: string;
   choices?: { targetId: string; text: string; condition?: string }[];
+  textVariants?: { id: string; text: string; priority?: number; condition: string }[];
   visualProperties?: { x?: number; y?: number; color?: string; size?: number };
   metadata?: { isStartNode?: boolean; tags?: string[] };
 }
@@ -40,6 +41,17 @@ export interface ProgressState {
 }
 
 export function mapServerNode(doc: ServerNode): StoryNode {
+  // Text variants store their condition as a serialized ConditionSpec string,
+  // exactly like choices. Parse + validate each one; drop any whose condition
+  // string is missing or malformed rather than shipping an unusable variant.
+  const textVariants: TextVariant[] = (doc.textVariants ?? [])
+    .map((v) => {
+      const spec = parseConditionSpec(v.condition);
+      if (!spec) { console.warn(`storyMapper: dropping textVariant "${v.id}" — unparseable`); return null; }
+      return { id: v.id, text: v.text, priority: v.priority ?? 0, condition: spec };
+    })
+    .filter((v): v is TextVariant => v !== null);
+
   return {
     id: doc.id,
     label: doc.label ?? doc.id,
@@ -55,6 +67,7 @@ export function mapServerNode(doc: ServerNode): StoryNode {
         ? { targetId: c.targetId, text: c.text, condition }
         : { targetId: c.targetId, text: c.text };
     }),
+    textVariants: textVariants.length > 0 ? textVariants : undefined,
     x: doc.visualProperties?.x,
     y: doc.visualProperties?.y,
     color: doc.visualProperties?.color,
