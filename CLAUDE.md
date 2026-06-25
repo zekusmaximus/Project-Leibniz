@@ -227,6 +227,15 @@ reintroduce parallel copies of the reducer or initial state.
 - `SaveLoadService.ts` — localStorage persistence (key `project-leibniz-save`).
 - `SaveLoadControls.tsx` — Save/Load/Reset UI. **Mounted on `HomePage`.** Save
   writes both localStorage and the backend (via `saveProgress`).
+- `mapVisuals.ts` — **pure** (no React/D3) derivations that make a playthrough's
+  ORDER legible on the map: `getVisitOrder(history)` (1-based first-visit number
+  per node), `getTrailLinkKeys(history, links)` (the directed `source->target`
+  edges actually walked, for the highlighted trail), and `getNodeRole(...)`
+  (current > ending > visited > unvisited emphasis). `HomePage` calls these to
+  annotate the D3 node/link data (`visitOrder`/`isCurrent`/`isEnding` on nodes,
+  `onTrail` on links); `NodeMap` is the renderer (badges, gold direction arrows,
+  role strokes). Covered by `mapVisuals.test.ts`. **MiniMap does not yet show
+  this** — it's a separate D3 component on `NarrativePage`.
 
 ### Backend integration (wired)
 On mount, `StoryProvider` fetches `/api/nodes` + `/api/links`, maps them with
@@ -323,18 +332,25 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   non-component module (`StoryContextDefinition.ts` exports only the context) so
   `react-refresh/only-export-components` stays happy. Don't co-locate a component
   export with the context.
-- **Tests: Vitest on the client only.** `client/tests/*.test.ts` cover the pure
-  logic — `conditionDSL`, `StoryReducer`, `StoryLogicService` (variants + rule
-  engine), `storyMapper`, `graphIntegrity` (validates the canonical
-  `data/storyGraph.json`: no dangling choice targets/links, all conditions parse,
-  unique ids, every node reachable from `start`), and `endingsIntegration`
-  (drives playthroughs through the real reducer + rule engine and asserts the
-  order-based endings fire for the right visit orders). Run with `npm test` (config in
-  `client/vitest.config.ts`, `node` environment). Tests live outside `src/` so the
-  app build's `tsc` ignores them, but `eslint .` still lints them (keep them
-  warning-clean). The **server** has no tests — its `test` script deliberately
-  exits 1. When you change the story graph, run `npm test`: `graphIntegrity`
-  catches broken references and unreachable nodes.
+- **Tests: Vitest on the client only.** Mostly pure logic — `conditionDSL`,
+  `StoryReducer`, `StoryLogicService` (variants + rule engine), `storyMapper`,
+  `mapVisuals` (visit-order / trail / role derivation), `graphIntegrity`
+  (validates the canonical `data/storyGraph.json`: no dangling choice
+  targets/links, all conditions parse, unique ids, every node reachable from
+  `start`), and `endingsIntegration` (drives playthroughs through the real
+  reducer + rule engine and asserts the order-based endings fire for the right
+  visit orders). Default env is `node`. **DOM/component tests** (e.g.
+  `nodeMap.render.test.tsx`) opt into jsdom with a `// @vitest-environment jsdom`
+  docblock on the first line and use `@testing-library/react`; they assert the
+  synchronous render structure (data-join groups, badges, trail), NOT animated
+  end-states or settled simulation positions (those run on timers that don't
+  settle deterministically under jsdom). Test files match `tests/**/*.test.{ts,tsx}`
+  (config in `client/vitest.config.ts`, which loads `@vitejs/plugin-react`). Run
+  with `npm test`. Tests live outside `src/` so the app build's `tsc` ignores
+  them, but `eslint .` still lints them (keep them warning-clean). The **server**
+  has no tests — its `test` script deliberately exits 1. When you change the story
+  graph, run `npm test`: `graphIntegrity` catches broken references and
+  unreachable nodes.
 - **D3 import styles differ** between `NodeMap.tsx` (granular modules) and
   `MiniMap.tsx` (`import * as d3`). `src/d3.d.ts` declares `module 'd3'` to keep
   the namespace import type-checking.

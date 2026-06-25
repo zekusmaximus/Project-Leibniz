@@ -17,6 +17,10 @@ export interface NodeData {
   color?: string;
   size?: number;
   visitedCount?: number;
+  // Order-legibility annotations, derived in the pages via `mapVisuals`:
+  visitOrder?: number; // 1-based position of this node's first visit, if visited
+  isCurrent?: boolean; // the node the reader is on now
+  isEnding?: boolean; // a terminal ending node
   fx?: number | null;
   fy?: number | null;
   index?: number;
@@ -29,11 +33,13 @@ export interface LinkData {
   target: string | NodeData;
   color?: string;
   width?: number;
+  onTrail?: boolean; // this edge was walked, in this direction — highlight it
 }
 
 interface CustomSimulationLink extends SimulationLinkDatum<NodeData> {
   color?: string;
   width?: number;
+  onTrail?: boolean;
 }
 
 interface NodeMapProps {
@@ -68,6 +74,10 @@ const NodeMap: React.FC<NodeMapProps> = ({
   // Refs to store selections for later use in animations
   const nodeElementsRef = useRef<D3NodeSelection | null>(null);
   const linkElementsRef = useRef<D3LinkSelection | null>(null);
+  // Node ids that have already entered the map once. Used so only genuinely new
+  // reveals play the grow-in animation — previously every reveal tore down and
+  // re-bounced the whole graph, which read as the map "jumping" on each visit.
+  const seenNodeIdsRef = useRef<Set<string>>(new Set());
   const { dispatch } = useStory(); // Get dispatch from context
 
   // Function to zoom to fit all nodes in view
@@ -239,6 +249,10 @@ const NodeMap: React.FC<NodeMapProps> = ({
     // Define zoom behavior
     const zoomBehaviorInstance = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 3]) // Allow more zoom range (out to 0.2x, in to 3x)
+      // Set the extent explicitly to the known viewport so d3-zoom never falls
+      // back to reading SVGSVGElement.width.baseVal (which jsdom doesn't
+      // implement, breaking tests — and which is just the container size anyway).
+      .extent([[0, 0], [width, height]])
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
         g.attr('transform', event.transform.toString());
       });
@@ -287,6 +301,33 @@ const NodeMap: React.FC<NodeMapProps> = ({
       feMerge.append("feMergeNode").attr("in", "coloredBlur");
       feMerge.append("feMergeNode").attr("in", "SourceGraphic");
     });
+
+    // Arrowhead for the walked "trail" links, so the path reads as directed.
+    defs.append('marker')
+      .attr('id', 'trail-arrow')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 9)
+      .attr('refY', 0)
+      .attr('markerWidth', 5)
+      .attr('markerHeight', 5)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-4L9,0L0,4')
+      .style('fill', '#ffcc00');
+
+    // Which nodes are entering for the first time (animate only these).
+    const isNewNode = (d: NodeData) => !seenNodeIdsRef.current.has(d.id);
+
+    // Stroke emphasis by role: the current node and the highlighted (transition)
+    // node get a white ring, endings a gold one, everything else the faint default.
+    const nodeStroke = (d: NodeData) =>
+      d.id === highlightedNodeId || d.isCurrent
+        ? '#fff'
+        : d.isEnding
+          ? '#d4af37'
+          : 'rgba(255, 255, 255, 0.6)';
+    const nodeStrokeWidth = (d: NodeData) =>
+      d.id === highlightedNodeId || d.isCurrent || d.isEnding ? 2.5 : 1.5;
 
     // Helper function to calculate appropriate node size based on container dimensions
     const calculateNodeSize = () => {
@@ -343,11 +384,16 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .data(linksForSimulation as unknown as CustomSimulationLink[])
       .enter()
       .append('line')
-      .style('stroke', (_: CustomSimulationLink, i: number) => `url(#link-gradient-${i})`)
-      .style('stroke-opacity', 0.6)
-      .style('stroke-width', (d: CustomSimulationLink) => d.width || 2)
-      .style('stroke-dasharray', '5,5')
-      .style('stroke-dashoffset', 10);
+      .classed('trail', (d: CustomSimulationLink) => !!d.onTrail)
+      // Walked edges are drawn solid, brighter, and carry a direction arrow;
+      // un-walked (merely revealed) edges keep the faint dashed look.
+      .style('stroke', (d: CustomSimulationLink, i: number) =>
+        d.onTrail ? '#ffcc00' : `url(#link-gradient-${i})`)
+      .style('stroke-opacity', (d: CustomSimulationLink) => (d.onTrail ? 0.9 : 0.6))
+      .style('stroke-width', (d: CustomSimulationLink) => (d.onTrail ? (d.width || 2) + 1 : d.width || 2))
+      .style('stroke-dasharray', (d: CustomSimulationLink) => (d.onTrail ? 'none' : '5,5'))
+      .style('stroke-dashoffset', 10)
+      .attr('marker-end', (d: CustomSimulationLink) => (d.onTrail ? 'url(#trail-arrow)' : null));
 
     // Store linkElements in ref for later use
     linkElementsRef.current = linkElements;
@@ -412,24 +458,29 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .attr('r', (d: NodeData) => (d.size || 35) + 5)
       .style('fill', 'transparent')
       .style('filter', (d: NodeData) => {
-        if (d.id === highlightedNodeId) return 'url(#glow-highlighted)';
+        if (d.id === highlightedNodeId || d.isCurrent) return 'url(#glow-highlighted)';
         if (d.visitedCount && d.visitedCount > 0) return 'url(#glow-visited)';
         return 'url(#glow-normal)';
       })
       .style('opacity', 0.7);
 
-    // Main circle layer with animation
-    nodeElements.append('circle')
+    // Main circle layer. Only NEW nodes grow in from r=0; nodes that were already
+    // on the map render at full size so a fresh reveal no longer re-bounces the
+    // whole graph. Endings carry a gold ring; the current node a white one.
+    const mainCircles = nodeElements.append('circle')
       .attr('class', 'node-main-circle')
-      .attr('r', 0)
+      .attr('r', (d: NodeData) => (isNewNode(d) ? 0 : (d.size || nodeSize)))
       .style('fill', (d: NodeData) => {
         let baseColor = d.color || 'steelblue';
         if (d.visitedCount && d.visitedCount > 1) baseColor = '#6a0dad';
         if (d.id === highlightedNodeId) baseColor = '#ffcc00';
         return baseColor;
       })
-      .style('stroke', (d: NodeData) => d.id === highlightedNodeId ? '#fff' : 'rgba(255, 255, 255, 0.6)')
-      .style('stroke-width', (d: NodeData) => d.id === highlightedNodeId ? 2.5 : 1.5)
+      .style('stroke', (d: NodeData) => nodeStroke(d))
+      .style('stroke-width', (d: NodeData) => nodeStrokeWidth(d));
+
+    mainCircles
+      .filter((d: NodeData) => isNewNode(d))
       .transition()
       .duration(800)
       .ease(easeBounce)
@@ -484,8 +535,12 @@ const NodeMap: React.FC<NodeMapProps> = ({
 
     simulationRef.current = simulationInstance;
 
-    // Run simulation with a gentle cooldown
-    simulationInstance.alpha(0.8).restart();
+    // Reheat gently once the map is established; only the very first layout gets
+    // a full reheat. A later reveal adds one unplaced node, but a low alpha
+    // settles it in without flinging the already-placed graph around. (seenNode
+    // ids are still the PREVIOUS render's set here — they're updated below.)
+    const isColdStart = seenNodeIdsRef.current.size === 0;
+    simulationInstance.alpha(isColdStart ? 0.8 : 0.3).restart();
 
     // Add a tick event handler with softer constraints
     simulationInstance.on('tick', () => {
@@ -576,6 +631,37 @@ const NodeMap: React.FC<NodeMapProps> = ({
       .style('pointer-events', 'none')
       .text((d: NodeData) => d.visitedCount?.toString() ?? '');
 
+    // Visit-order badge (top-left): the 1-based position of this node's FIRST
+    // visit, so the map shows the sequence the reader walked — the thing the
+    // narrative adapts to. Only rendered for nodes that have been visited.
+    nodeElements
+      .filter((d: NodeData) => d.visitOrder !== undefined)
+      .append('circle')
+      .attr('class', 'order-indicator')
+      .attr('r', 7)
+      .attr('cx', (d: NodeData) => -(d.size || nodeSize) * 0.6)
+      .attr('cy', (d: NodeData) => -(d.size || nodeSize) * 0.6)
+      .style('fill', '#1e232d')
+      .style('stroke', '#ffcc00')
+      .style('stroke-width', 1.5);
+
+    nodeElements
+      .filter((d: NodeData) => d.visitOrder !== undefined)
+      .append('text')
+      .attr('class', 'visit-order')
+      .attr('x', (d: NodeData) => -(d.size || nodeSize) * 0.6)
+      .attr('y', (d: NodeData) => -(d.size || nodeSize) * 0.6 + 3)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '9px')
+      .style('font-weight', 'bold')
+      .style('fill', '#ffcc00')
+      .style('pointer-events', 'none')
+      .text((d: NodeData) => d.visitOrder?.toString() ?? '');
+
+    // Mark every current node id as seen, so the next render treats them as
+    // existing (no re-bounce) and only brand-new reveals animate in.
+    nodesData.forEach((d) => seenNodeIdsRef.current.add(d.id));
+
     // Add hover tooltips
     nodeElements
       .on('mouseenter', function (this: SVGGElement, _event: MouseEvent, d: NodeData) {
@@ -618,8 +704,8 @@ const NodeMap: React.FC<NodeMapProps> = ({
           .transition()
           .duration(500)
           .attr('r', d.size || 15)
-          .style('stroke-width', d.id === highlightedNodeId ? 2.5 : 1.5)
-          .style('stroke', d.id === highlightedNodeId ? '#fff' : 'rgba(255, 255, 255, 0.6)');
+          .style('stroke-width', nodeStrokeWidth(d))
+          .style('stroke', nodeStroke(d));
 
         linkElements
           .transition()

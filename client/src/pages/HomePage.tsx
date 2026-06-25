@@ -5,11 +5,13 @@ import { useStory } from '../context/context';
 import NodeMap from '../components/NodeMap';
 import { NodeData } from '../components/NodeMap';
 import SaveLoadControls from '../services/SaveLoadControls';
+import storyLogicService from '../services/StoryLogicService';
+import { getVisitOrder, getTrailLinkKeys } from '../services/mapVisuals';
 import { useRef, useState, useEffect } from 'react';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { visitNode, getVisibleNodes, getVisibleLinks } = useStory();
+  const { state, visitNode, getVisibleNodes, getVisibleLinks } = useStory();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const containerRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -19,6 +21,11 @@ const HomePage = () => {
     y: number
   } | null>(null);
 
+  // Order-legibility annotations (pure, from mapVisuals): the first-visit
+  // sequence number per node and the directed edges actually walked.
+  const visitOrder = getVisitOrder(state.history);
+  const trailKeys = getTrailLinkKeys(state.history, state.links);
+
   // Convert story nodes to D3 node format
   const d3Nodes = getVisibleNodes().map(node => ({
   id: node.id,
@@ -27,14 +34,18 @@ const HomePage = () => {
   y: node.y,
   color: node.color || 'steelblue', // Default color
   size: node.size || 25, // Default size
-  visitedCount: node.visitedCount || 0
+  visitedCount: node.visitedCount || 0,
+  visitOrder: visitOrder[node.id], // 1-based first-visit order, if visited
+  isCurrent: node.id === state.currentNodeId,
+  isEnding: storyLogicService.isEnding(node.id)
 }));
 
 const d3Links = getVisibleLinks().map(link => ({
   source: link.source,
   target: link.target,
   color: link.color || '#888', // Default color
-  width: link.width || 2 // Default width
+  width: link.width || 2, // Default width
+  onTrail: trailKeys.has(`${link.source}->${link.target}`) // walked edge → highlight
 }));
 
 // Add debug to check if we're getting data
