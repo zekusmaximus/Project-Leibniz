@@ -180,6 +180,58 @@ reintroduce parallel copies of the reducer or initial state.
   (dropping any that won't parse). Edit the variant in the JSON only — see
   "The story graph (single source of truth)" below.
 
+### Morphing prose (the beats model)
+
+Beyond appended `textVariants`, a node may carry compositional **`prose`** — an
+ordered list of **beats** that MORPH the sentence by path rather than appending to
+it. Types: `ProseBeat { id, includeWhen?, phrasings: ProsePhrasing[] }` and
+`ProsePhrasing { id?, text, priority?, when? }` (in `StoryTypes.ts`).
+
+- **Render** (`StoryLogicService.renderProse`): per beat, skip it if `includeWhen`
+  fails; otherwise pick the **highest-priority phrasing whose `when` matches**,
+  falling back to the conditionless default (ties → author order). The chosen
+  phrasings are woven with single spaces into one paragraph. `getNodeText` routes
+  through `renderProse` when `node.prose` is present, ELSE the legacy `text` +
+  appended-variants path — so migration is incremental and per-node.
+- **Conditions** are serialized `ConditionSpec` strings in the JSON (same as
+  variants/choices); `storyMapper.mapServerProse` parses them (dropping an
+  unparseable phrasing, then a beat with no usable phrasings).
+- **"Why this text?"** uses `getActiveAdaptations` (unified over both models): for
+  a prose node it returns the conditionally-chosen phrasings (defaults omitted,
+  since a default has no path-specific reason); for a legacy node it returns
+  `getMatchingVariants`. The adaptation ledger uses the same accessor.
+- **Authoring rule** (enforced by `graphIntegrity`): every beat must be able to
+  render something — a default phrasing OR an `includeWhen`. Beat ids unique per
+  node; phrasing ids unique per beat. `whisperSource` is the reference node
+  (arrival morphs by route; a `return-depth` beat replaces the arrival on
+  revisits; a `silence-mark` beat appears only after the Null). Covered by
+  `proseMorph.test.ts` (and the whisperSource cases in `contentVariants.test.ts`).
+- The server `StoryNode` schema has a matching optional `prose` field.
+
+### Exporting the experienced novel (`services/narrativeExport.ts`)
+
+`buildTranscript(state)` REPLAYS `state.history` from a cleared graph through the
+real reducer + a PRIVATE `StoryLogicService` instance (so it never disturbs the
+live singleton), snapshotting `getNodeText` after each visit — one `NovelSection`
+per visit, **repeats kept**, each faithful to how it read at that step (recency/
+order morphs included). `toMarkdown` serializes a transcript to a Markdown book
+(title, colophon/permutation fingerprint, one `## ` chapter per section).
+`NarrativePage` wires the download button. The `NovelSection.chapter` slot is
+reserved for later structure (chapter grouping). Covered by
+`narrativeExport.test.ts`. Determinism matters: same path → same novel.
+
+### Connective edge-prose (transitions)
+
+A `StoryLink` may carry its own `prose` beats — the prose for TRAVERSING that edge,
+a short bridge between the source and target sections. `storyMapper.mapServerLink`
+parses it (same `mapServerProse` helper), and `StoryLogicService.renderTransition(
+sourceId, targetId, state)` weaves it via the shared `weaveBeats` core (so a
+crossing can morph by state — e.g. `pathB`→`echoChamber` reads differently once the
+crystal has been heard). `buildTranscript` interleaves the transition into each
+`NovelSection` (`transition?`), `toMarkdown` renders it as an italic bridge opening
+the chapter, and `NarrativePage` shows it as a muted italic lead-in above the node
+prose. `graphIntegrity` validates link prose with the same rules as node prose.
+
 ## Services layer (`client/src/services/`)
 
 - `ApiService.ts` — axios REST client for the backend (`fetchAllNodes`,
@@ -277,9 +329,15 @@ so there is nothing to keep in sync — edit that one file and re-seed.
 ## Authoring nodes with AI (`tools/generate-node.js`)
 
 A standalone, dependency-free Node CLI (uses the built-in global `fetch`; needs
-Node 18+) that asks an LLM to co-author a fully-formed story node — base `text`,
-conditional `textVariants`, `choices`, and `links` — in the exact shape
-`server/seed.js` expects (conditions serialized to JSON strings).
+Node 18+) that asks an LLM to co-author a fully-formed story node — morphing
+`prose` beats (preferred) or legacy appended `textVariants`, plus `choices` and
+`links` — in the exact shape `server/seed.js` expects (conditions serialized to
+JSON strings). The system prompt teaches the full **12-kind** Condition DSL and
+the beats model (arrival/return/layer beats, `includeWhen`/`when`/default), and
+the validator enforces the same authoring rule as `graphIntegrity` (every beat
+has a default phrasing or an `includeWhen`; EITHER `prose` OR `textVariants`).
+Internals are exported (`module.exports`) for testing; it self-runs only as a
+CLI (`require.main === module`).
 
 ```bash
 node tools/generate-node.js "A node where the reader meets their own echo"

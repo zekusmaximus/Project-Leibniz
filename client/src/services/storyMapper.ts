@@ -6,8 +6,23 @@
 // The server nests presentation under `visualProperties` and authoring metadata
 // under `metadata`; the client keeps a flatter, render-friendly shape. Keep all
 // of that shape-knowledge here so the rest of the app never sees the raw API DTOs.
-import { StoryNode, StoryLink, StoryState, StoryChoice, TextVariant } from '../context/StoryTypes';
+import {
+  StoryNode,
+  StoryLink,
+  StoryState,
+  StoryChoice,
+  TextVariant,
+  ProseBeat,
+  ProsePhrasing,
+} from '../context/StoryTypes';
 import { compileConditionFromString, parseConditionSpec } from './conditionDSL';
+
+/** A prose beat as stored on the server (conditions serialized to strings). */
+export interface ServerProseBeat {
+  id: string;
+  includeWhen?: string;
+  phrasings: { id?: string; text: string; priority?: number; when?: string }[];
+}
 
 /** Node document as returned by `GET /api/nodes`. */
 export interface ServerNode {
@@ -16,6 +31,7 @@ export interface ServerNode {
   text: string;
   choices?: { targetId: string; text: string; condition?: string }[];
   textVariants?: { id: string; text: string; priority?: number; condition: string }[];
+  prose?: ServerProseBeat[];
   visualProperties?: { x?: number; y?: number; color?: string; size?: number };
   metadata?: { isStartNode?: boolean; tags?: string[] };
 }
@@ -24,6 +40,7 @@ export interface ServerNode {
 export interface ServerLink {
   source: string;
   target: string;
+  prose?: ServerProseBeat[];
   visualProperties?: { color?: string; width?: number };
   metadata?: { isHidden?: boolean };
 }
@@ -38,6 +55,42 @@ export interface ProgressState {
   visitCounts?: Record<string, number>;
   flags?: Record<string, boolean | number | string>;
   history?: string[];
+}
+
+/**
+ * Parse the serialized prose beats into the client shape: each phrasing's `when`
+ * and each beat's `includeWhen` are parsed from JSON strings into ConditionSpec
+ * objects. A phrasing whose `when` is present but unparseable is dropped (it
+ * would otherwise never — or always — fire unpredictably); a beat that loses all
+ * its phrasings is dropped. A beat's `includeWhen` that won't parse is treated as
+ * absent (the beat is simply always considered). Returns undefined when no beats
+ * survive, so a node with no usable prose cleanly falls back to text/textVariants.
+ */
+function mapServerProse(beats: ServerProseBeat[] | undefined): ProseBeat[] | undefined {
+  if (!beats?.length) return undefined;
+  const mapped: ProseBeat[] = [];
+  for (const beat of beats) {
+    const phrasings: ProsePhrasing[] = [];
+    for (const p of beat.phrasings ?? []) {
+      if (p.when === undefined) {
+        phrasings.push({ id: p.id, text: p.text, priority: p.priority });
+        continue;
+      }
+      const spec = parseConditionSpec(p.when);
+      if (!spec) {
+        console.warn(`storyMapper: dropping prose phrasing in beat "${beat.id}" — unparseable condition`);
+        continue;
+      }
+      phrasings.push({ id: p.id, text: p.text, priority: p.priority, when: spec });
+    }
+    if (!phrasings.length) {
+      console.warn(`storyMapper: dropping prose beat "${beat.id}" — no usable phrasings`);
+      continue;
+    }
+    const includeWhen = beat.includeWhen ? parseConditionSpec(beat.includeWhen) : undefined;
+    mapped.push({ id: beat.id, includeWhen, phrasings });
+  }
+  return mapped.length > 0 ? mapped : undefined;
 }
 
 export function mapServerNode(doc: ServerNode): StoryNode {
@@ -68,6 +121,7 @@ export function mapServerNode(doc: ServerNode): StoryNode {
         : { targetId: c.targetId, text: c.text };
     }),
     textVariants: textVariants.length > 0 ? textVariants : undefined,
+    prose: mapServerProse(doc.prose),
     x: doc.visualProperties?.x,
     y: doc.visualProperties?.y,
     color: doc.visualProperties?.color,
@@ -84,6 +138,7 @@ export function mapServerLink(doc: ServerLink): StoryLink {
     color: doc.visualProperties?.color,
     width: doc.visualProperties?.width,
     isRevealed: false,
+    prose: mapServerProse(doc.prose),
   };
 }
 

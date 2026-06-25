@@ -6,6 +6,7 @@ import MiniMap from '../components/MiniMap';
 import storyLogicService from '../services/StoryLogicService';
 import { describeCondition } from '../services/conditionDSL';
 import { getVisitOrder, getTrailLinkKeys, getVisitRecency } from '../services/mapVisuals';
+import { buildTranscript, toMarkdown, novelFilename } from '../services/narrativeExport';
 import { useRef, useState, useEffect, useCallback } from 'react';
 
 const NarrativePage = () => {
@@ -94,10 +95,17 @@ const NarrativePage = () => {
     : "";
   const paragraphs = currentNodeText.split(/\n{2,}/).filter((p) => p.trim().length > 0);
 
+  // Connective prose for the edge that led here (if the previous step has one) —
+  // a short bridge so the reading flows rather than jumping between blocks.
+  const prevNodeId =
+    state.history.length >= 2 ? state.history[state.history.length - 2] : undefined;
+  const transition =
+    nodeId && prevNodeId ? storyLogicService.renderTransition(prevNodeId, nodeId, state).text : '';
+
   // "Why this text?" — the adaptive fragments currently appended to the base
   // text, plus a plain-language reason each one fired. This surfaces that the
   // story is reacting to which nodes were visited and in what order.
-  const activeVariants = nodeId ? storyLogicService.getMatchingVariants(nodeId, state) : [];
+  const activeVariants = nodeId ? storyLogicService.getActiveAdaptations(nodeId, state) : [];
   const resolveLabel = (id: string) => state.nodes[id]?.label ?? id;
   const snippet = (t: string) => (t.length > 70 ? t.slice(0, 67).trimEnd() + '…' : t);
 
@@ -179,6 +187,24 @@ const NarrativePage = () => {
     navigate('/');
   };
 
+  // Download the reader's personal novel: the exact prose they've experienced so
+  // far, in visit order (repeats kept), as a Markdown file. Builds the transcript
+  // once and reuses it for both the content and the filename.
+  const handleDownloadNovel = () => {
+    const transcript = buildTranscript(state);
+    if (transcript.stepCount === 0) return;
+    const markdown = toMarkdown(transcript, { generatedAt: new Date().toISOString() });
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = novelFilename(transcript);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <motion.div 
       className="narrative-page"
@@ -196,6 +222,8 @@ const NarrativePage = () => {
         <h2>{getCurrentNode()?.label || ''}</h2>
         
         <div className="story-text-container">
+          {transition && <p className="story-transition"><em>{transition}</em></p>}
+
           {paragraphs.map((para, i) => (
             <p key={i}>{para}</p>
           ))}
@@ -265,8 +293,24 @@ const NarrativePage = () => {
           {isEnding && (
             <div className="story-ending">
               <p className="ending-label">— An Ending —</p>
+              <button className="choice-button" onClick={handleDownloadNovel}>
+                Download your novel
+              </button>
               <button className="choice-button" onClick={handleRestart}>
                 Begin again
+              </button>
+            </div>
+          )}
+
+          {!isEnding && state.history.length > 0 && (
+            <div className="novel-download">
+              <button
+                type="button"
+                className="adaptations-toggle"
+                onClick={handleDownloadNovel}
+                title="Download the prose you've read so far, in order, as Markdown"
+              >
+                Download your novel so far ({state.history.length})
               </button>
             </div>
           )}
