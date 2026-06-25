@@ -346,9 +346,11 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   `mapVisuals` (visit-order / trail / role derivation), `graphIntegrity`
   (validates the canonical `data/storyGraph.json`: no dangling choice
   targets/links, all conditions parse, unique ids, every node reachable from
-  `start`), and `endingsIntegration` (drives playthroughs through the real
+  `start`), `endingsIntegration` (drives playthroughs through the real
   reducer + rule engine and asserts the order-based endings fire for the right
-  visit orders). Default env is `node`. **DOM/component tests** (e.g.
+  visit orders), and `contentVariants` (same playthrough harness, asserts the
+  order-sensitive `textVariants` — opening moves, direct hops, deep revisits —
+  surface for the right order and stay hidden otherwise). Default env is `node`. **DOM/component tests** (e.g.
   `nodeMap.render.test.tsx`) opt into jsdom with a `// @vitest-environment jsdom`
   docblock on the first line and use `@testing-library/react`; they assert the
   synchronous render structure (data-join groups, badges, trail), NOT animated

@@ -96,6 +96,24 @@
           "priority": 65,
           "condition": "{\"kind\":\"flag\",\"key\":\"chorusUnlocked\"}",
           "text": "Whisper, echo, and silence sound together at the core now — three notes that refuse to collapse into one. The chord is a door."
+        },
+        {
+          "id": "opened-with-whispers",
+          "priority": 55,
+          "condition": "{\"kind\":\"historyStartsWith\",\"sequence\":[\"start\",\"pathA\"]}",
+          "text": "Your very first move was toward the whispers — and the anomaly has kept that, the way a sentence keeps its opening word. Whatever order came after, you began by listening."
+        },
+        {
+          "id": "opened-with-echoes",
+          "priority": 55,
+          "condition": "{\"kind\":\"historyStartsWith\",\"sequence\":[\"start\",\"pathB\"]}",
+          "text": "You opened with the echoes. The anomaly remembers the choice the way a room remembers the first sound made in it — everything since has been a repetition of that turning."
+        },
+        {
+          "id": "opened-with-silence",
+          "priority": 55,
+          "condition": "{\"kind\":\"historyStartsWith\",\"sequence\":[\"start\",\"pathC\"]}",
+          "text": "You began by walking into the silence, before any voice had been spoken to lose. The anomaly treats you differently for it: as something that chose absence first, and came looking for sound afterward."
         }
       ],
       "visualProperties": {
@@ -226,6 +244,18 @@
           "priority": 45,
           "condition": "{\"kind\":\"withinNSteps\",\"node\":\"silenceSource\",\"steps\":2}",
           "text": "The Null is still cold on you — you stepped out of it only a breath ago, and the crystal's song keeps catching on the silence you carried back in."
+        },
+        {
+          "id": "crossed-from-echoes",
+          "priority": 55,
+          "condition": "{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"echoChamber\",\"second\":\"whisperSource\"}",
+          "text": "You crossed straight here from the chamber, no corridor between — the resonance closed the gap in a single step. The crystal is still warm with echoes that have not yet had time to cool into whispers."
+        },
+        {
+          "id": "crystal-worn",
+          "priority": 95,
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":3}",
+          "text": "You have come back to the crystal so often that the path to it is worn to glass. It no longer finishes your thoughts; it thinks them first and waits, a little wearily, for you to catch up to what you always say here."
         }
       ],
       "visualProperties": {
@@ -284,6 +314,18 @@
           "priority": 40,
           "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
           "text": "The shadows seem fewer since the Null — or quieter, holding still in the spaces where the silence taught them to wait."
+        },
+        {
+          "id": "crossed-from-whispers",
+          "priority": 75,
+          "condition": "{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"whisperSource\",\"second\":\"echoChamber\"}",
+          "text": "You came across from the crystal in a single step, the whisper not yet finished in your mouth — and the chamber catches it mid-word, returning it to you as though it had always been an echo and never a thing first said."
+        },
+        {
+          "id": "echoes-worn",
+          "priority": 90,
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\",\"op\":\">=\",\"count\":2}",
+          "text": "You return to the chamber. The shadows do not startle now; they have your measure, and they move when you move — a half-second early, the way the echoes do."
         }
       ],
       "visualProperties": {
@@ -409,6 +451,18 @@
           "priority": 45,
           "condition": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"withinNSteps\",\"node\":\"whisperSource\",\"steps\":2},{\"kind\":\"withinNSteps\",\"node\":\"echoChamber\",\"steps\":2}]}",
           "text": "A sound came down with you just now — a word, or its echo, caught in your wake. The Null takes it without a ripple, and the quiet afterward is a fraction deeper than before."
+        },
+        {
+          "id": "voice-carried-straight",
+          "priority": 55,
+          "condition": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"whisperSource\",\"second\":\"silenceSource\"},{\"kind\":\"visitedImmediatelyAfter\",\"first\":\"echoChamber\",\"second\":\"silenceSource\"}]}",
+          "text": "You came down with no breath between the voice and its ending — straight from sound into the Null, carrying it the way you carry a held note off a cliff. It does not echo here. It simply stops, mid-fall, and the stopping is clean."
+        },
+        {
+          "id": "silence-first",
+          "priority": 48,
+          "condition": "{\"kind\":\"historyStartsWith\",\"sequence\":[\"start\",\"pathC\"]}",
+          "text": "This was your first descent of all — before any whisper, before any echo, you came down to the place they are made from. You knew the absence before you knew the sound. Everything since has only been you giving the silence something to have swallowed."
         }
       ],
       "visualProperties": {
