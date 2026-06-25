@@ -17,7 +17,13 @@ interface StoryRule {
 // Terminal nodes. Reaching one ends the run; NarrativePage hides further
 // choices and offers a restart. Kept here so both the graph data and the UI
 // agree on what counts as an ending.
-const ENDING_NODE_IDS = new Set<string>(['convergence', 'singularity']);
+const ENDING_NODE_IDS = new Set<string>([
+  'convergence',
+  'singularity',
+  'chorus',
+  'descent',
+  'emergence',
+]);
 
 class StoryLogicService {
   private rules: StoryRule[] = [];
@@ -109,6 +115,60 @@ class StoryLogicService {
       once: true,
       executed: false,
     });
+
+    // Rule: seeing ALL THREE sources (whisper crystal + echo chamber + the Null)
+    // lets the three voices hold a chord — unlocks the Chorus ending. This one is
+    // about WHICH nodes were seen, not order.
+    this.addRule({
+      id: 'all_sources_seen',
+      trigger: (state) =>
+        state.visitCounts['whisperSource'] > 0 &&
+        state.visitCounts['echoChamber'] > 0 &&
+        state.visitCounts['silenceSource'] > 0,
+      effect: () => ({
+        flags: { chorusUnlocked: true },
+      }),
+      priority: 65,
+      once: true,
+      executed: false,
+    });
+
+    // Order endings: the two order-determined ways through the three sources.
+    // These fire only when the LAST three visits are exactly the three sources
+    // in a given order (reachable by chaining the source↔source resonance
+    // shortcuts), so the literal order you walk them picks the ending.
+    //   descent   = whisper → echo → silence (the voices fading out)
+    //   emergence = silence → echo → whisper (booting up out of the Null)
+    // Reuse the condition DSL rather than re-implementing the tail check.
+    const descentOrder = compileCondition({
+      kind: 'historyEndsWith',
+      sequence: ['whisperSource', 'echoChamber', 'silenceSource'],
+    });
+    this.addRule({
+      id: 'descent_order',
+      trigger: (state) => descentOrder(state),
+      effect: () => ({
+        flags: { descentDiscovered: true },
+      }),
+      priority: 60,
+      once: true,
+      executed: false,
+    });
+
+    const emergenceOrder = compileCondition({
+      kind: 'historyEndsWith',
+      sequence: ['silenceSource', 'echoChamber', 'whisperSource'],
+    });
+    this.addRule({
+      id: 'emergence_order',
+      trigger: (state) => emergenceOrder(state),
+      effect: () => ({
+        flags: { emergenceDiscovered: true },
+      }),
+      priority: 60,
+      once: true,
+      executed: false,
+    });
   }
 
   addRule(rule: StoryRule) {
@@ -193,9 +253,9 @@ class StoryLogicService {
     // Append matching text variants. The base text always renders; each
     // matching variant (highest priority first) is appended on top. All of the
     // adaptive prose that used to live in a hardcoded per-node switch here is
-    // now authored as `textVariants` on the nodes themselves (see
-    // InitialState.ts / seed.js), so it works identically whether the graph is
-    // served from the backend or loaded from the offline fallback.
+    // now authored as `textVariants` on the nodes themselves (in the canonical
+    // client/src/data/storyGraph.json), so it works identically whether the graph
+    // is served from the backend or loaded from the offline fallback.
     const matchingVariants = this.getMatchingVariants(nodeId, state);
     for (const variant of matchingVariants) {
       if (variant.text) text += '\n\n' + variant.text;

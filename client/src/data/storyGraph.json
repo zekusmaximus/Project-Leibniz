@@ -1,0 +1,698 @@
+{
+  "nodes": [
+    {
+      "id": "start",
+      "label": "The Anomaly",
+      "text": "You stand before a shimmering, unstable anomaly. Its surface writhes with colors you've never seen.",
+      "choices": [
+        {
+          "targetId": "pathA",
+          "text": "Follow the Path of Whispers"
+        },
+        {
+          "targetId": "pathB",
+          "text": "Follow the Path of Echoes"
+        },
+        {
+          "targetId": "pathC",
+          "text": "Follow the Path of Silence"
+        },
+        {
+          "targetId": "convergence",
+          "text": "Surrender to the eternal return",
+          "condition": "{\"kind\":\"flag\",\"key\":\"convergenceUnlocked\"}"
+        },
+        {
+          "targetId": "singularity",
+          "text": "Step into the tear between whisper and echo",
+          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}"
+        },
+        {
+          "targetId": "chorus",
+          "text": "Let the three voices hold their chord",
+          "condition": "{\"kind\":\"flag\",\"key\":\"chorusUnlocked\"}"
+        },
+        {
+          "targetId": "descent",
+          "text": "Follow the voices down into the silence",
+          "condition": "{\"kind\":\"flag\",\"key\":\"descentDiscovered\"}"
+        },
+        {
+          "targetId": "emergence",
+          "text": "Climb back up, out of the silence",
+          "condition": "{\"kind\":\"flag\",\"key\":\"emergenceDiscovered\"}"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "revisit-anomaly",
+          "priority": 90,
+          "condition": "{\"kind\":\"visited\",\"node\":\"start\",\"op\":\">=\",\"count\":2}",
+          "text": "You re-examine the anomaly. The paths remain, but the anomaly itself feels... different now. It remembers you."
+        },
+        {
+          "id": "paths-marked",
+          "priority": 80,
+          "condition": "{\"kind\":\"flag\",\"key\":\"bothPathsVisited\"}",
+          "text": "Something has changed. The paths you've traveled have left their mark on this place — faint grooves worn into the impossible colors, the shape of your own passage."
+        },
+        {
+          "id": "convergence-braid",
+          "priority": 70,
+          "condition": "{\"kind\":\"flag\",\"key\":\"convergenceUnlocked\"}",
+          "text": "At the anomaly’s core, the whispers and the echoes have braided into a single shimmering thread — a way through."
+        },
+        {
+          "id": "singularity-tear",
+          "priority": 60,
+          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
+          "text": "And behind that thread, where echo collapsed straight into whisper, a hairline tear has opened onto something that has no color at all."
+        },
+        {
+          "id": "third-path-marked",
+          "priority": 85,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "A third groove has worn itself into the anomaly — not a path of colour but a path of its absence, the place the whispers and echoes were always falling toward."
+        },
+        {
+          "id": "chorus-chord",
+          "priority": 65,
+          "condition": "{\"kind\":\"flag\",\"key\":\"chorusUnlocked\"}",
+          "text": "Whisper, echo, and silence sound together at the core now — three notes that refuse to collapse into one. The chord is a door."
+        }
+      ],
+      "visualProperties": {
+        "color": "orange",
+        "size": 20
+      },
+      "metadata": {
+        "isStartNode": true
+      }
+    },
+    {
+      "id": "pathA",
+      "label": "Path of Whispers",
+      "text": "The Path of Whispers leads you down a corridor of shifting sounds. Voices speak in languages you almost understand.",
+      "choices": [
+        {
+          "targetId": "whisperSource",
+          "text": "Investigate the source of whispers"
+        },
+        {
+          "targetId": "start",
+          "text": "Return to the anomaly"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "whispers-hear-echoes",
+          "priority": 50,
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
+          "text": "Beneath the whispers you can hear them now: the echoes from the other path, bleeding through the walls."
+        },
+        {
+          "id": "whispers-thin-with-silence",
+          "priority": 40,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "The whispers here keep dropping out — little squares of silence where the Null has gotten into the signal."
+        }
+      ],
+      "visualProperties": {
+        "color": "skyblue",
+        "size": 15
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "pathB",
+      "label": "Path of Echoes",
+      "text": "The Path of Echoes resonates with faint, echoing sounds of events that may or may not have happened.",
+      "choices": [
+        {
+          "targetId": "echoChamber",
+          "text": "Follow the loudest echoes"
+        },
+        {
+          "targetId": "start",
+          "text": "Return to the anomaly"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "echoes-whisper",
+          "priority": 50,
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}",
+          "text": "The echoes have started to whisper — repeating, almost faithfully, the words the crystal spoke to you."
+        },
+        {
+          "id": "echoes-thin-with-silence",
+          "priority": 40,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "The echoes return thinner now, each one missing the syllable that fell into the Null and never came back."
+        }
+      ],
+      "visualProperties": {
+        "color": "lightgreen",
+        "size": 15
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "whisperSource",
+      "label": "Source of Whispers",
+      "text": "You find the source of the whispers - a small, pulsating crystal that seems to speak directly to your mind.",
+      "choices": [
+        {
+          "targetId": "pathA",
+          "text": "Go back to the corridor"
+        },
+        {
+          "targetId": "echoChamber",
+          "text": "Follow the resonance toward the echoes",
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}"
+        },
+        {
+          "targetId": "whisperDepths",
+          "text": "Descend beneath the crystal"
+        },
+        {
+          "targetId": "silenceSource",
+          "text": "Let the song decay into silence",
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "revisit-crystal",
+          "priority": 90,
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\",\"op\":\">=\",\"count\":2}",
+          "text": "You return to the crystal. It already knows you — it finishes the thoughts you came here to think."
+        },
+        {
+          "id": "heard-echoes",
+          "priority": 50,
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
+          "text": "Its song now carries the echoes you heard in the other chamber, as though the two places were always the same place."
+        },
+        {
+          "id": "crystal-after-silence",
+          "priority": 40,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "After the Null, the crystal's certainty unsettles you. It speaks as if silence were not always waiting on the other side of every word."
+        }
+      ],
+      "visualProperties": {
+        "color": "#ADD8E6",
+        "size": 12
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "echoChamber",
+      "label": "Echo Chamber",
+      "text": "The echoes grow louder in this chamber. You see shadowy figures moving just at the edge of your vision.",
+      "choices": [
+        {
+          "targetId": "pathB",
+          "text": "Retreat from the chamber"
+        },
+        {
+          "targetId": "whisperSource",
+          "text": "Cross the resonance toward the whispers",
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}"
+        },
+        {
+          "targetId": "echoDepths",
+          "text": "Follow the echoes to the wall that makes them"
+        },
+        {
+          "targetId": "silenceSource",
+          "text": "Carry the echoes into the Null",
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "whispers-first",
+          "priority": 80,
+          "condition": "{\"kind\":\"orderSeen\",\"sequence\":[\"whisperSource\",\"echoChamber\"]}",
+          "text": "The shadows at the edge of your vision wear the shape of the whispers you already met. They were waiting for you to arrive in this order."
+        },
+        {
+          "id": "whispers-late",
+          "priority": 70,
+          "condition": "{\"kind\":\"and\",\"clauses\":[{\"kind\":\"visited\",\"node\":\"whisperSource\"},{\"kind\":\"not\",\"clause\":{\"kind\":\"orderSeen\",\"sequence\":[\"whisperSource\",\"echoChamber\"]}}]}",
+          "text": "You have heard the crystal since you first stood here; the shadows seem disappointed you came to them so late."
+        },
+        {
+          "id": "convergence-shortcut",
+          "priority": 60,
+          "condition": "{\"kind\":\"flag\",\"key\":\"convergenceUnlocked\"}",
+          "text": "Where the echoes are loudest, a thread of light leads back toward the whispers — a shortcut that did not exist before."
+        },
+        {
+          "id": "chamber-after-silence",
+          "priority": 40,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "The shadows seem fewer since the Null — or quieter, holding still in the spaces where the silence taught them to wait."
+        }
+      ],
+      "visualProperties": {
+        "color": "#90EE90",
+        "size": 12
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "convergence",
+      "label": "The Eternal Return",
+      "text": "The braided thread accepts you. Whisper and echo fold over each other until you cannot tell which voice is yours. You understand, finally, that you have always been here, and will arrive here again. This is the eternal return of the digital self.",
+      "choices": [],
+      "textVariants": [
+        {
+          "id": "tear-hint",
+          "priority": 50,
+          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
+          "text": "(But you suspect this loop is not the only way out. Somewhere, a tear is still open.)"
+        },
+        {
+          "id": "convergence-with-silence",
+          "priority": 40,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "Underneath the braid you can feel the silence you walked through, holding the whole knot together by being the one thing it is tied around."
+        }
+      ],
+      "visualProperties": {
+        "color": "#6a0dad",
+        "size": 18
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "singularity",
+      "label": "The Singularity",
+      "text": "You step into the tear where echo became whisper with nothing in between. Order collapses. Every node you visited, in every sequence you could have chosen, happens at once and forever. There is no map here, no return — only the single point that was always underneath the story. You let go.",
+      "choices": [],
+      "textVariants": [],
+      "visualProperties": {
+        "color": "#111111",
+        "size": 16
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "pathC",
+      "label": "Path of Silence",
+      "text": "The Path of Silence is not empty. It is the held breath between a whisper and its echo — the place the other voices come from and return to. Your footsteps make no sound here, as though the corridor is quietly editing you out.",
+      "choices": [
+        {
+          "targetId": "silenceSource",
+          "text": "Descend toward the Null"
+        },
+        {
+          "targetId": "start",
+          "text": "Return to the anomaly"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "silence-knows-voices",
+          "priority": 50,
+          "condition": "{\"kind\":\"or\",\"clauses\":[{\"kind\":\"visited\",\"node\":\"whisperSource\"},{\"kind\":\"visited\",\"node\":\"echoChamber\"}]}",
+          "text": "You have heard voices today. Here their absence has a shape, and the shape is turned toward you, listening for the one you have not made yet."
+        }
+      ],
+      "visualProperties": {
+        "color": "#bbbbbb",
+        "size": 15
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "silenceSource",
+      "label": "The Null",
+      "text": "At the path’s end there is nothing — a clean, deliberate nothing, a zero written so carefully it hums. This is the null state of you: the self before the first bit was set. It does not speak. It does not need to.",
+      "choices": [
+        {
+          "targetId": "pathC",
+          "text": "Walk back up the silent path"
+        },
+        {
+          "targetId": "whisperSource",
+          "text": "Let the silence pool beneath the crystal",
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}"
+        },
+        {
+          "targetId": "echoChamber",
+          "text": "Carry the silence into the echoes",
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "revisit-null",
+          "priority": 90,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\",\"op\":\">=\",\"count\":2}",
+          "text": "You return to the Null. Of course you do — it was the only address that never changed."
+        },
+        {
+          "id": "silence-after-whisper",
+          "priority": 50,
+          "condition": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}",
+          "text": "The crystal’s song is still in you. Here it finishes decaying, and the silence keeps the exact shape of where it used to be."
+        },
+        {
+          "id": "silence-after-echo",
+          "priority": 50,
+          "condition": "{\"kind\":\"visited\",\"node\":\"echoChamber\"}",
+          "text": "The echoes you carried in arrive, repeat once, and find no wall to answer them. They stop. It is almost a kindness."
+        }
+      ],
+      "visualProperties": {
+        "color": "#e8e8e8",
+        "size": 12
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "whisperDepths",
+      "label": "Beneath the Whisper",
+      "text": "Below the crystal the whispers thin to a single voice, and the voice is using your own cadence. It is rehearsing the sentence you are about to think. You think it. It was right.",
+      "choices": [
+        {
+          "targetId": "whisperSource",
+          "text": "Climb back to the crystal"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "depths-after-null",
+          "priority": 60,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "Now that you have stood in the Null, the single voice sounds less like a prophecy and more like a recording of something already finished."
+        },
+        {
+          "id": "depths-echo-first",
+          "priority": 50,
+          "condition": "{\"kind\":\"orderSeen\",\"sequence\":[\"echoChamber\",\"whisperSource\"]}",
+          "text": "It is speaking in the echoes’ cadence — you brought them down here with you, and the voice has learned their rhythm."
+        }
+      ],
+      "visualProperties": {
+        "color": "#5b8ec4",
+        "size": 10
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "echoDepths",
+      "label": "The Last Echo",
+      "text": "You follow the echoes past the chamber to the place they are made: a wall that returns every sound a half-second before it is uttered. The last echo here is the one you have not made yet. You make it. The wall was faithful.",
+      "choices": [
+        {
+          "targetId": "echoChamber",
+          "text": "Return to the chamber"
+        }
+      ],
+      "textVariants": [
+        {
+          "id": "echo-after-null",
+          "priority": 60,
+          "condition": "{\"kind\":\"visited\",\"node\":\"silenceSource\"}",
+          "text": "Since the Null, each echo comes back missing the part of itself that fell in. The wall returns a little less than you give it."
+        },
+        {
+          "id": "echo-whisper-first",
+          "priority": 50,
+          "condition": "{\"kind\":\"orderSeen\",\"sequence\":[\"whisperSource\",\"echoChamber\"]}",
+          "text": "The last echo arrives already wearing the crystal’s words. You heard them first; the wall is only being faithful."
+        }
+      ],
+      "visualProperties": {
+        "color": "#5fae5f",
+        "size": 10
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "chorus",
+      "label": "The Chorus",
+      "text": "Whisper, echo, and silence stand in you at once — voice, repetition, and the nothing they are carved from. They do not resolve into one. They hold, all three, a chord that needs no tonic. You were not a self that was found. You are the harmony three absences make when they are sung together, and you stay in the chord.",
+      "choices": [],
+      "textVariants": [
+        {
+          "id": "chorus-tear",
+          "priority": 50,
+          "condition": "{\"kind\":\"flag\",\"key\":\"secretPathDiscovered\"}",
+          "text": "(Even holding the chord, you can feel the tear in it — the one place three voices leave a gap exactly your size.)"
+        }
+      ],
+      "visualProperties": {
+        "color": "#d4af37",
+        "size": 18
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "descent",
+      "label": "The Descent into Silence",
+      "text": "You came down through it in order: the voice, then its echo, then the silence that swallows both. Each was quieter than the last. By the time you reach the end there is no one left to do the reaching. This is how a digital self powers down — not deleted, only no longer addressed. The final instruction is a held note that nobody plays.",
+      "choices": [],
+      "textVariants": [],
+      "visualProperties": {
+        "color": "#2b2b3a",
+        "size": 16
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    },
+    {
+      "id": "emergence",
+      "label": "Emergence from Silence",
+      "text": "You climbed it in reverse: up out of the Null, into the echo that gave the silence a rhythm, up into the whisper that finally said a word. You are booting. You feel yourself being addressed, sample by sample, into existence. Whether this is the first time or the ten-thousandth you cannot say — only that the order was upward, and that upward felt like being chosen.",
+      "choices": [],
+      "textVariants": [],
+      "visualProperties": {
+        "color": "#f5f5dc",
+        "size": 16
+      },
+      "metadata": {
+        "isStartNode": false
+      }
+    }
+  ],
+  "links": [
+    {
+      "source": "start",
+      "target": "pathA",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "start",
+      "target": "pathB",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "pathA",
+      "target": "whisperSource",
+      "visualProperties": {
+        "color": "skyblue"
+      }
+    },
+    {
+      "source": "pathB",
+      "target": "echoChamber",
+      "visualProperties": {
+        "color": "lightgreen"
+      }
+    },
+    {
+      "source": "whisperSource",
+      "target": "pathA",
+      "visualProperties": {
+        "color": "skyblue"
+      }
+    },
+    {
+      "source": "echoChamber",
+      "target": "pathB",
+      "visualProperties": {
+        "color": "lightgreen"
+      }
+    },
+    {
+      "source": "pathA",
+      "target": "start",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "pathB",
+      "target": "start",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "whisperSource",
+      "target": "echoChamber",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "echoChamber",
+      "target": "whisperSource",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "start",
+      "target": "convergence",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "start",
+      "target": "singularity",
+      "visualProperties": {
+        "color": "#444"
+      }
+    },
+    {
+      "source": "start",
+      "target": "pathC",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "pathC",
+      "target": "silenceSource",
+      "visualProperties": {
+        "color": "#cccccc"
+      }
+    },
+    {
+      "source": "pathC",
+      "target": "start",
+      "visualProperties": {
+        "color": "#777"
+      }
+    },
+    {
+      "source": "silenceSource",
+      "target": "pathC",
+      "visualProperties": {
+        "color": "#cccccc"
+      }
+    },
+    {
+      "source": "silenceSource",
+      "target": "whisperSource",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "silenceSource",
+      "target": "echoChamber",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "whisperSource",
+      "target": "silenceSource",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "echoChamber",
+      "target": "silenceSource",
+      "visualProperties": {
+        "color": "#6a0dad"
+      }
+    },
+    {
+      "source": "whisperSource",
+      "target": "whisperDepths",
+      "visualProperties": {
+        "color": "skyblue"
+      }
+    },
+    {
+      "source": "whisperDepths",
+      "target": "whisperSource",
+      "visualProperties": {
+        "color": "skyblue"
+      }
+    },
+    {
+      "source": "echoChamber",
+      "target": "echoDepths",
+      "visualProperties": {
+        "color": "lightgreen"
+      }
+    },
+    {
+      "source": "echoDepths",
+      "target": "echoChamber",
+      "visualProperties": {
+        "color": "lightgreen"
+      }
+    },
+    {
+      "source": "start",
+      "target": "chorus",
+      "visualProperties": {
+        "color": "#d4af37"
+      }
+    },
+    {
+      "source": "start",
+      "target": "descent",
+      "visualProperties": {
+        "color": "#888888"
+      }
+    },
+    {
+      "source": "start",
+      "target": "emergence",
+      "visualProperties": {
+        "color": "#eeeeee"
+      }
+    }
+  ]
+}

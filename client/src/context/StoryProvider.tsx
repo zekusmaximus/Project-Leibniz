@@ -19,6 +19,9 @@ import storyLogicService from '../services/StoryLogicService';
 const ENDING_UNLOCKS: { nodeId: string; flag: string }[] = [
   { nodeId: 'convergence', flag: 'convergenceUnlocked' },
   { nodeId: 'singularity', flag: 'secretPathDiscovered' },
+  { nodeId: 'chorus', flag: 'chorusUnlocked' },
+  { nodeId: 'descent', flag: 'descentDiscovered' },
+  { nodeId: 'emergence', flag: 'emergenceDiscovered' },
 ];
 
 // Create context provider
