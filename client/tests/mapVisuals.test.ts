@@ -3,6 +3,7 @@ import {
   getVisitOrder,
   getVisitRecency,
   getTrailLinkKeys,
+  getJourneyFrame,
   getNodeRole,
 } from '../src/services/mapVisuals';
 import type { StoryLink } from '../src/context/StoryTypes';
@@ -79,6 +80,35 @@ describe('getTrailLinkKeys', () => {
   it('records a revisited edge only once', () => {
     const trail = getTrailLinkKeys(['start', 'pathA', 'start', 'pathA'], [link('start', 'pathA'), link('pathA', 'start')]);
     expect([...trail].sort()).toEqual(['pathA->start', 'start->pathA']);
+  });
+});
+
+describe('getJourneyFrame', () => {
+  const links = [link('start', 'pathA'), link('pathA', 'whisperSource')];
+  const history = ['start', 'pathA', 'whisperSource'];
+
+  it('at the full step matches the live derivations', () => {
+    const frame = getJourneyFrame(history, links, history.length);
+    expect(frame.visitOrder).toEqual(getVisitOrder(history));
+    expect([...frame.trailKeys].sort()).toEqual([...getTrailLinkKeys(history, links)].sort());
+    expect(frame.currentId).toBe('whisperSource');
+    expect(frame).toMatchObject({ step: 3, total: 3 });
+  });
+
+  it('truncates the run to the first `step` visits', () => {
+    const frame = getJourneyFrame(history, links, 2);
+    // Only start + pathA have been reached at step 2.
+    expect(frame.visitOrder).toEqual({ start: 1, pathA: 2 });
+    expect(frame.currentId).toBe('pathA');
+    expect([...frame.trailKeys]).toEqual(['start->pathA']);
+    // whisperSource is not yet on the trail or numbered.
+    expect(frame.visitOrder.whisperSource).toBeUndefined();
+  });
+
+  it('clamps the step into [0, total]', () => {
+    expect(getJourneyFrame(history, links, 0)).toMatchObject({ step: 0, currentId: undefined });
+    expect(getJourneyFrame(history, links, 99).step).toBe(3);
+    expect(getJourneyFrame(history, links, -5).step).toBe(0);
   });
 });
 

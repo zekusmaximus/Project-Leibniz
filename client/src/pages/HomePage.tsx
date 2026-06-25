@@ -6,7 +6,7 @@ import NodeMap from '../components/NodeMap';
 import { NodeData } from '../components/NodeMap';
 import SaveLoadControls from '../services/SaveLoadControls';
 import storyLogicService from '../services/StoryLogicService';
-import { getVisitOrder, getTrailLinkKeys, getVisitRecency } from '../services/mapVisuals';
+import { getJourneyFrame } from '../services/mapVisuals';
 import { useRef, useState, useEffect } from 'react';
 
 const HomePage = () => {
@@ -21,11 +21,59 @@ const HomePage = () => {
     y: number
   } | null>(null);
 
-  // Order-legibility annotations (pure, from mapVisuals): the first-visit
-  // sequence number per node and the directed edges actually walked.
-  const visitOrder = getVisitOrder(state.history);
-  const recency = getVisitRecency(state.history);
-  const trailKeys = getTrailLinkKeys(state.history, state.links);
+  // Journey playback: `playbackStep` null means "live" (annotate with the whole
+  // history); a number means the reader is scrubbing/replaying, so we annotate
+  // the map from only the first N visits. Either way the same pure frame drives
+  // visit-order badges, recency fade, the trail and the lit "current" node.
+  const [playbackStep, setPlaybackStep] = useState<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const total = state.history.length;
+  const isScrubbing = playbackStep !== null;
+  const effectiveStep = isScrubbing ? playbackStep : total;
+  const frame = getJourneyFrame(state.history, state.links, effectiveStep);
+  const visitOrder = frame.visitOrder;
+  const recency = frame.recency;
+  const trailKeys = frame.trailKeys;
+  // While scrubbing, the lit node is wherever the reader stood at that step;
+  // live, it's the real current node.
+  const currentId = isScrubbing ? frame.currentId : state.currentNodeId;
+
+  // Auto-advance the replay one visit at a time; on reaching the end, snap back
+  // to live. Cleared on pause/unmount.
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (total === 0) {
+      setIsPlaying(false);
+      return;
+    }
+    const id = setInterval(() => {
+      setPlaybackStep((prev) => {
+        const next = (prev ?? 0) + 1;
+        if (next >= total) {
+          setIsPlaying(false);
+          return null; // back to live at the end of the replay
+        }
+        return next;
+      });
+    }, 750);
+    return () => clearInterval(id);
+  }, [isPlaying, total]);
+
+  const handlePlayToggle = () => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
+    }
+    // Restart from the beginning if we're live or already at the end.
+    setPlaybackStep((prev) => (prev == null || prev >= total ? 1 : prev));
+    setIsPlaying(true);
+  };
+
+  const handleScrub = (value: number) => {
+    setIsPlaying(false);
+    // Dragging to the end returns to the live view.
+    setPlaybackStep(value >= total ? null : value);
+  };
 
   // Convert story nodes to D3 node format
   const d3Nodes = getVisibleNodes().map(node => ({
@@ -38,7 +86,7 @@ const HomePage = () => {
   visitedCount: node.visitedCount || 0,
   visitOrder: visitOrder[node.id], // 1-based first-visit order, if visited
   recency: recency[node.id], // decay weight: recent visits stay lit, older fade
-  isCurrent: node.id === state.currentNodeId,
+  isCurrent: node.id === currentId,
   isEnding: storyLogicService.isEnding(node.id)
 }));
 
@@ -77,6 +125,9 @@ const d3Links = getVisibleLinks().map(link => ({
   }, [d3Nodes.length]);
 
   const handleNodeClick = (nodeId: string, nodeData: NodeData) => {
+    // Leaving a replay: a fresh visit always returns the map to live.
+    setIsPlaying(false);
+    setPlaybackStep(null);
     visitNode(nodeId);
     
     // Store transition data for animation
@@ -149,6 +200,36 @@ const d3Links = getVisibleLinks().map(link => ({
             enableZoomAnimation={!!nodeTransition}
         />
       </div>
+
+      {total >= 2 && (
+        <div className="journey-controls">
+          <button
+            type="button"
+            className="journey-play"
+            onClick={handlePlayToggle}
+            aria-label={isPlaying ? 'Pause replay' : 'Replay journey'}
+            title={isPlaying ? 'Pause replay' : 'Replay your journey'}
+          >
+            {isPlaying ? '❚❚' : '▶'}
+          </button>
+          <input
+            type="range"
+            className="journey-slider"
+            min={1}
+            max={total}
+            value={effectiveStep}
+            onChange={(e) => handleScrub(Number(e.target.value))}
+            aria-label="Scrub through your journey"
+          />
+          <span className="journey-label">
+            {isScrubbing
+              ? `Step ${effectiveStep} / ${total}${
+                  currentId ? ` · ${state.nodes[currentId]?.label ?? currentId}` : ''
+                }`
+              : 'Live'}
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 };

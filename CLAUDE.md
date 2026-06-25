@@ -241,8 +241,13 @@ reintroduce parallel copies of the reducer or initial state.
   visited node — most-recently-visited = 1, oldest = `floor` — so a *cooling
   trail* fades behind the reader; ranks by LAST visit, so a revisit refreshes a
   node), `getTrailLinkKeys(history, links)` (the directed `source->target`
-  edges actually walked, for the highlighted trail), and `getNodeRole(...)`
-  (current > ending > visited > unvisited emphasis). `HomePage` calls these to
+  edges actually walked, for the highlighted trail), `getNodeRole(...)`
+  (current > ending > visited > unvisited emphasis), and `getJourneyFrame(history,
+  links, step)` (bundles the above for the first `step` visits — `visitOrder`,
+  `recency`, `trailKeys` and the `currentId` at that step — so the map can REPLAY
+  a journey by truncating history; `HomePage`'s play/scrub controls drive `step`,
+  and because only annotations change (not node ids) NodeMap re-renders without
+  reheating the simulation). `HomePage` calls these to
   annotate the D3 node/link data (`visitOrder`/`recency`/`isCurrent`/`isEnding`
   on nodes, `onTrail` on links); both `NodeMap` (`HomePage`) and `MiniMap`
   (`NarrativePage`) render them (badges/order numbers, gold trail + direction

@@ -66,6 +66,42 @@ export function getVisitRecency(history: string[], floor = 0.4): Record<string, 
   return recency;
 }
 
+/**
+ * All the order-legibility annotations for a single point in a playthrough —
+ * the run as it stood after its first `step` visits. Truncating history is what
+ * lets the map REPLAY a journey: at step k the trail, the visit-order badges and
+ * the recency fade all reflect only the first k visits, and `currentId` is the
+ * node the reader stood on then. Nodes visited later simply carry no annotation
+ * (they stay on the map, un-numbered and off-trail), so the path builds up as
+ * the step advances. `step` is clamped to `[0, history.length]`.
+ */
+export interface JourneyFrame {
+  visitOrder: Record<string, number>;
+  recency: Record<string, number>;
+  trailKeys: Set<string>;
+  currentId: string | undefined;
+  step: number;
+  total: number;
+}
+
+export function getJourneyFrame(
+  history: string[],
+  links: StoryLink[],
+  step: number
+): JourneyFrame {
+  const total = history.length;
+  const clamped = Math.max(0, Math.min(step, total));
+  const sliced = history.slice(0, clamped);
+  return {
+    visitOrder: getVisitOrder(sliced),
+    recency: getVisitRecency(sliced),
+    trailKeys: getTrailLinkKeys(sliced, links),
+    currentId: sliced[sliced.length - 1],
+    step: clamped,
+    total,
+  };
+}
+
 export type NodeRole = 'current' | 'ending' | 'visited' | 'unvisited';
 
 /**

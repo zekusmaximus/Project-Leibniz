@@ -135,6 +135,57 @@
   opacity: 0.65;
 }
 
+/* Journey playback: replay/scrub the path the reader walked. */
+.journey-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 80%;
+  max-width: 800px;
+  margin: 14px auto 0;
+  padding: 8px 14px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(20, 25, 35, 0.5);
+}
+
+.journey-play {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 204, 0, 0.6);
+  background: transparent;
+  color: #ffcc00;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.journey-play:hover {
+  background: rgba(255, 204, 0, 0.15);
+  border-color: #ffcc00;
+}
+
+.journey-slider {
+  flex: 1 1 auto;
+  accent-color: #ffcc00;
+  cursor: pointer;
+}
+
+.journey-label {
+  flex: 0 0 auto;
+  min-width: 110px;
+  text-align: right;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Run-wide adaptation ledger: variants grouped by the node they belong to. */
 .ledger-list {
   margin-top: 12px;
