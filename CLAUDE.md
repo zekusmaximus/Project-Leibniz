@@ -317,9 +317,15 @@ so there is nothing to keep in sync — edit that one file and re-seed.
 ## Authoring nodes with AI (`tools/generate-node.js`)
 
 A standalone, dependency-free Node CLI (uses the built-in global `fetch`; needs
-Node 18+) that asks an LLM to co-author a fully-formed story node — base `text`,
-conditional `textVariants`, `choices`, and `links` — in the exact shape
-`server/seed.js` expects (conditions serialized to JSON strings).
+Node 18+) that asks an LLM to co-author a fully-formed story node — morphing
+`prose` beats (preferred) or legacy appended `textVariants`, plus `choices` and
+`links` — in the exact shape `server/seed.js` expects (conditions serialized to
+JSON strings). The system prompt teaches the full **12-kind** Condition DSL and
+the beats model (arrival/return/layer beats, `includeWhen`/`when`/default), and
+the validator enforces the same authoring rule as `graphIntegrity` (every beat
+has a default phrasing or an `includeWhen`; EITHER `prose` OR `textVariants`).
+Internals are exported (`module.exports`) for testing; it self-runs only as a
+CLI (`require.main === module`).
 
 ```bash
 node tools/generate-node.js "A node where the reader meets their own echo"

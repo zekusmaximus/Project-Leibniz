@@ -4,11 +4,12 @@
 // AI co-authoring tool for Project-Leibniz story nodes.
 //
 // Given a one-line concept (or a markdown brief, or a JSONL batch), this script
-// asks an LLM to author a fully-formed story node — base prose, conditional
-// `textVariants`, and outgoing `choices` + `links` — in exactly the shape
-// `server/seed.js` expects. Conditions are emitted as serialized ConditionSpec
-// strings (the same JSON the seed file stores), so generated nodes drop straight
-// into the seed graph and round-trip through the client's storyMapper.
+// asks an LLM to author a fully-formed story node — MORPHING `prose` beats (or
+// legacy appended `textVariants`) plus outgoing `choices` + `links` — in exactly
+// the shape `server/seed.js` expects. Conditions (the full 12-kind DSL) are
+// emitted as serialized ConditionSpec strings (the same JSON the seed file
+// stores), so generated nodes drop straight into client/src/data/storyGraph.json
+// and round-trip through the client's storyMapper.
 //
 // Usage:
 //   node tools/generate-node.js "A node where the reader meets their own echo"
@@ -61,34 +62,85 @@ const DEFAULT_MODEL = 'claude-3-5-haiku-latest';
 // ---------------------------------------------------------------------------
 const SYSTEM_PROMPT = `You are a co-author for "Eternal Return of the Digital Self" (Project-Leibniz), a
 web-based interactive speculative-fiction experience. The reader navigates a graph
-of interconnected story nodes; visiting nodes in different orders mutates what the
+of interconnected story nodes; visiting nodes in different orders MORPHS what the
 prose says. Your job: author one new story node, fully formed, as strict JSON.
 
 ## The Condition DSL
 
-Text variants and choices are gated by serializable conditions. A condition is a
-plain JSON object ("ConditionSpec"). There are exactly seven kinds — never invent
-others:
+Prose and choices are gated by serializable conditions. A condition is a plain JSON
+object ("ConditionSpec"). There are exactly TWELVE kinds — never invent others:
 
-1. flag            { "kind": "flag", "key": "<flagName>" }
-                   { "kind": "flag", "key": "<flagName>", "equals": true | 42 | "str" }
-                   True when the named flag is set (truthy), or equals the value.
+1.  flag                   { "kind": "flag", "key": "<flagName>" }
+                           { "kind": "flag", "key": "<flagName>", "equals": true | 42 | "str" }
+                           True when the named flag is set (truthy), or equals the value.
 
-2. visited         { "kind": "visited", "node": "<nodeId>" }
-                   { "kind": "visited", "node": "<nodeId>", "op": ">="|">"|"<"|"<="|"==", "count": <n> }
-                   Compares a node's visit count (default: visited at least once).
+2.  visited                { "kind": "visited", "node": "<id>" }
+                           { "kind": "visited", "node": "<id>", "op": ">="|">"|"<"|"<="|"==", "count": <n> }
+                           Compares a node's visit count (default: visited at least once).
 
-3. historyEndsWith { "kind": "historyEndsWith", "sequence": ["<id>", "<id>"] }
-                   True when the visit history ends with this exact consecutive run.
+3.  notVisited             { "kind": "notVisited", "node": "<id>" }
+                           True when the node has never been visited.
 
-4. orderSeen       { "kind": "orderSeen", "sequence": ["<id>", "<id>"] }
-                   True when these nodes appear in this relative order (not necessarily adjacent).
+4.  visitedCountAcross     { "kind": "visitedCountAcross", "nodes": ["<id>", ...], "op"?: <op>, "count"?: <n> }
+                           Compares the SUMMED visit count across several nodes (how much the
+                           reader has wandered), default: at least once between them.
 
-5. and             { "kind": "and", "clauses": [ <spec>, <spec>, ... ] }
-6. or              { "kind": "or", "clauses": [ <spec>, <spec>, ... ] }
-7. not             { "kind": "not", "clause": <spec> }
+5.  withinNSteps           { "kind": "withinNSteps", "node": "<id>", "steps": <n> }
+                           RECENCY: true when the node was visited within the last <n> history
+                           entries (vs "visited", which is true forever once seen).
 
-Conditions compose: an "and" clause may contain a "not" wrapping an "orderSeen", etc.
+6.  historyEndsWith        { "kind": "historyEndsWith", "sequence": ["<id>", "<id>"] }
+                           The history ends with this exact consecutive run (how you got HERE).
+
+7.  historyStartsWith      { "kind": "historyStartsWith", "sequence": ["<id>", "<id>"] }
+                           The history BEGINS with this exact consecutive run (how the run opened).
+
+8.  orderSeen              { "kind": "orderSeen", "sequence": ["<id>", "<id>"] }
+                           These nodes appear in this relative order (gaps allowed).
+
+9.  visitedImmediatelyAfter { "kind": "visitedImmediatelyAfter", "first": "<id>", "second": "<id>" }
+                           ADJACENCY: "second" was visited in the step right after "first",
+                           anywhere in history (a direct hop). Unlike orderSeen (gaps) or
+                           historyEndsWith (tail only).
+
+10. and                    { "kind": "and", "clauses": [ <spec>, ... ] }
+11. or                     { "kind": "or", "clauses": [ <spec>, ... ] }
+12. not                    { "kind": "not", "clause": <spec> }
+
+Conditions compose: an "and" may contain a "not" wrapping an "orderSeen", etc.
+
+## Prose: the MORPHING beats model (preferred)
+
+Author the node's prose as "prose": an ordered list of BEATS. The point is that the
+SENTENCE itself changes by path — not that a fragment gets appended. Each beat
+resolves to AT MOST ONE phrasing and the chosen phrasings are woven into continuous
+prose:
+
+- For each beat: if "includeWhen" is present and false, the beat is OMITTED.
+  Otherwise pick the highest-"priority" phrasing whose "when" matches; a phrasing
+  with no "when" is the beat's DEFAULT. Ties keep the earlier phrasing.
+
+Use the two beat shapes deliberately:
+- A MORPHING beat (a sentence that should read differently by route/order): give it
+  several phrasings — conditional ones (higher priority, gated by "when") plus a
+  conditionless DEFAULT. e.g. an arrival beat: a "visitedImmediatelyAfter" phrasing
+  for a direct hop, an "orderSeen"/"visited" phrasing for having-seen-it-before, and
+  a fresh default.
+- A LAYER beat (genuinely additive material that only appears in some states): give
+  it an "includeWhen" and usually a single phrasing. e.g. a revisit beat gated by
+  { "kind": "visited", "node": "<thisNodeId>", "op": ">=", "count": 2 }.
+
+RULE: every beat must be able to render something — it MUST have either a default
+phrasing (no "when") OR an "includeWhen". Beat ids unique within the node; phrasing
+ids unique within a beat.
+
+Tip: gate first-arrival prose with an arrival beat
+{ "kind": "visited", "node": "<thisNodeId>", "op": "==", "count": 1 } and put the
+revisit prose in a separate beat gated >= 2, so a return reads differently rather
+than repeating the opening.
+
+(Legacy alternative: "textVariants" — fragments APPENDED after a base "text". Only
+use these for a simple add-on; prefer "prose" for anything that should morph.)
 
 ## Output schema
 
@@ -98,18 +150,20 @@ Return ONE JSON object and nothing else — no markdown fence, no commentary:
   "node": {
     "id": "<camelCase unique id>",
     "label": "<short human label>",
-    "text": "<base prose; ALWAYS rendered>",
-    "textVariants": [
+    "text": "<base prose; the fallback if you do NOT author 'prose'>",
+    "prose": [
       {
-        "id": "<kebab-case variant id, unique within the node>",
-        "priority": <integer; higher renders first>,
-        "condition": <ConditionSpec object>,
-        "text": "<prose appended after the base text when the condition matches>"
+        "id": "<kebab-case beat id, unique within the node>",
+        "includeWhen": <ConditionSpec object, optional>,
+        "phrasings": [
+          { "id": "<kebab id>", "priority": <int, optional>, "when": <ConditionSpec, optional>, "text": "<prose>" },
+          { "id": "<kebab id>", "text": "<the default phrasing — no 'when'>" }
+        ]
       }
     ],
     "choices": [
-      { "targetId": "<nodeId>", "text": "<choice label>" },
-      { "targetId": "<nodeId>", "text": "<choice label>", "condition": <ConditionSpec object> }
+      { "targetId": "<id>", "text": "<choice label>" },
+      { "targetId": "<id>", "text": "<choice label>", "condition": <ConditionSpec object> }
     ],
     "color": "<css color or hex>",
     "size": <integer 10-22>
@@ -120,11 +174,12 @@ Return ONE JSON object and nothing else — no markdown fence, no commentary:
 }
 
 Schema rules:
-- "condition" is the ConditionSpec OBJECT (not a string). The pipeline serializes it.
+- All conditions ("when", "includeWhen", choice "condition") are ConditionSpec
+  OBJECTS (not strings). The pipeline serializes them.
+- Author EITHER "prose" (preferred) OR "textVariants", not both. Always include a
+  base "text" too (it is the fallback when "prose" is absent).
 - Every choice's targetId MUST have a matching entry in "links" (source = this node).
-- textVariants priority is an integer; ties are allowed but avoid them.
 - Reference only node ids present in the supplied graph context, plus this node's own id.
-  If you must reference a node that does not exist yet, prefer one of the existing ids.
 
 ## Design rules
 
@@ -132,11 +187,10 @@ Schema rules:
   show-don't-tell. No purple filler.
 - Themes: digital consciousness, recursion, memory, the eternal return, the
   instability of identity. The reader is a self navigating a map of itself.
-- 2-4 choices. At least one choice OR one variant must be conditional.
-- 1-4 textVariants. Each must read naturally as an ADDITION to the base text
-  (the base always renders; variants append). Condition each on meaningfully
-  different states (revisits, visit order, flags, having-seen another node).
-- Keep base "text" to roughly 2-5 sentences; variants to 1-3 sentences.
+- 2-4 choices. At least one choice OR one beat/phrasing must be conditional.
+- 2-5 prose beats. Make the order-dependence real: at least one beat should MORPH
+  (a sentence that changes by route or order), not merely append. Each phrasing is
+  1-3 sentences; the woven result should read as one coherent passage.
 
 Output strict, parseable JSON only.`;
 
@@ -301,8 +355,13 @@ async function callOpenAI({ model, system, user, apiKey, temperature }) {
 const CONDITION_KINDS = new Set([
   'flag',
   'visited',
+  'notVisited',
+  'visitedCountAcross',
+  'withinNSteps',
   'historyEndsWith',
+  'historyStartsWith',
   'orderSeen',
+  'visitedImmediatelyAfter',
   'and',
   'or',
   'not',
@@ -314,10 +373,18 @@ function isValidCondition(spec) {
     case 'flag':
       return typeof spec.key === 'string';
     case 'visited':
+    case 'notVisited':
       return typeof spec.node === 'string';
+    case 'visitedCountAcross':
+      return Array.isArray(spec.nodes) && spec.nodes.every((s) => typeof s === 'string');
+    case 'withinNSteps':
+      return typeof spec.node === 'string' && typeof spec.steps === 'number';
     case 'historyEndsWith':
+    case 'historyStartsWith':
     case 'orderSeen':
       return Array.isArray(spec.sequence) && spec.sequence.every((s) => typeof s === 'string');
+    case 'visitedImmediatelyAfter':
+      return typeof spec.first === 'string' && typeof spec.second === 'string';
     case 'and':
     case 'or':
       return Array.isArray(spec.clauses) && spec.clauses.every(isValidCondition);
@@ -363,6 +430,37 @@ function validateResult(result) {
     });
   }
 
+  const beats = node.prose ?? [];
+  if (!Array.isArray(beats)) {
+    errors.push('node.prose must be an array');
+  } else {
+    beats.forEach((b, i) => {
+      if (typeof b.id !== 'string' || !b.id) errors.push(`prose[${i}].id missing`);
+      if (b.includeWhen !== undefined && !isValidCondition(b.includeWhen)) {
+        errors.push(`prose[${i}].includeWhen is not a valid ConditionSpec`);
+      }
+      if (!Array.isArray(b.phrasings) || b.phrasings.length === 0) {
+        errors.push(`prose[${i}].phrasings must be a non-empty array`);
+        return;
+      }
+      b.phrasings.forEach((p, j) => {
+        if (typeof p.text !== 'string' || !p.text) errors.push(`prose[${i}].phrasings[${j}].text missing`);
+        if (p.when !== undefined && !isValidCondition(p.when)) {
+          errors.push(`prose[${i}].phrasings[${j}].when is not a valid ConditionSpec`);
+        }
+      });
+      // A beat must be able to render something: a default phrasing or an includeWhen.
+      const hasDefault = b.phrasings.some((p) => p.when === undefined);
+      if (!hasDefault && b.includeWhen === undefined) {
+        errors.push(`prose[${i}] (${b.id}) can render nothing — add a default phrasing or an includeWhen`);
+      }
+    });
+  }
+
+  if (variants.length && beats.length) {
+    errors.push('author EITHER prose OR textVariants, not both');
+  }
+
   const choices = node.choices ?? [];
   const linkTargets = new Set((result.links ?? []).map((l) => l.target));
   if (!Array.isArray(choices)) {
@@ -382,9 +480,16 @@ function validateResult(result) {
 
   if (!Array.isArray(result.links)) errors.push('"links" must be an array');
 
+  const proseConditional = Array.isArray(beats)
+    ? beats.some(
+        (b) => b.includeWhen !== undefined || (b.phrasings ?? []).some((p) => p.when !== undefined)
+      )
+    : false;
   const hasConditional =
-    variants.some((v) => v.condition) || choices.some((c) => c.condition);
-  if (!hasConditional) errors.push('at least one choice or variant must be conditional');
+    variants.some((v) => v.condition) || choices.some((c) => c.condition) || proseConditional;
+  if (!hasConditional) {
+    errors.push('at least one choice, variant, or prose condition must be present');
+  }
 
   return errors;
 }
@@ -399,6 +504,23 @@ function toSeedShape(result) {
       condition: JSON.stringify(v.condition),
       text: v.text,
     }));
+  }
+  if (Array.isArray(node.prose)) {
+    // Serialize each beat's includeWhen and each phrasing's when to JSON strings,
+    // matching the shape storyGraph.json / the server store, dropping undefined keys.
+    node.prose = node.prose.map((b) => {
+      const beat = { id: b.id };
+      if (b.includeWhen !== undefined) beat.includeWhen = JSON.stringify(b.includeWhen);
+      beat.phrasings = (b.phrasings ?? []).map((p) => {
+        const phrasing = {};
+        if (p.id !== undefined) phrasing.id = p.id;
+        if (p.priority !== undefined) phrasing.priority = p.priority;
+        if (p.when !== undefined) phrasing.when = JSON.stringify(p.when);
+        phrasing.text = p.text;
+        return phrasing;
+      });
+      return beat;
+    });
   }
   if (Array.isArray(node.choices)) {
     node.choices = node.choices.map((c) =>
@@ -562,7 +684,12 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err.stack || String(err));
-  process.exit(1);
-});
+// Run as a CLI when invoked directly; export internals for testing when required.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.stack || String(err));
+    process.exit(1);
+  });
+}
+
+module.exports = { isValidCondition, validateResult, toSeedShape, extractJson };
