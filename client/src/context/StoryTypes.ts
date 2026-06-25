@@ -1,9 +1,19 @@
 // client/src/context/StoryTypes.ts
+import type { ConditionSpec } from '../services/conditionDSL';
+
+export interface TextVariant {
+  id: string;
+  text: string;
+  priority: number;
+  condition: ConditionSpec;
+}
+
 export interface StoryNode {
   id: string;
   label: string;
   text: string;
   choices?: StoryChoice[];
+  textVariants?: TextVariant[];
   x?: number;
   y?: number;
   color?: string;

@@ -1,5 +1,6 @@
 // client/src/services/StoryLogicService.ts
-import { StoryState } from '../context/StoryTypes';
+import { StoryState, TextVariant } from '../context/StoryTypes';
+import { compileCondition } from './conditionDSL';
 
 type StoryTrigger = (state: StoryState) => boolean;
 type StoryEffect = (state: StoryState) => Partial<StoryState>;
@@ -131,6 +132,7 @@ class StoryLogicService {
     this.rules.forEach((rule) => {
       rule.executed = false;
     });
+    this.variantCache.clear();
   }
 
   evaluateState(state: StoryState): Partial<StoryState> {
@@ -166,12 +168,41 @@ class StoryLogicService {
     return ENDING_NODE_IDS.has(nodeId);
   }
 
+  private variantCache = new Map<string, (state: StoryState) => boolean>();
+
+  private getVariantPredicate(nodeId: string, variant: TextVariant): (state: StoryState) => boolean {
+    const cacheKey = `${nodeId}::${variant.id}`;
+    let predicate = this.variantCache.get(cacheKey);
+    if (!predicate) {
+      predicate = compileCondition(variant.condition);
+      this.variantCache.set(cacheKey, predicate);
+    }
+    return predicate;
+  }
+
+  getMatchingVariants(nodeId: string, state: StoryState): TextVariant[] {
+    const node = state.nodes[nodeId];
+    if (!node?.textVariants?.length) return [];
+    return node.textVariants
+      .filter((v) => {
+        const predicate = this.getVariantPredicate(nodeId, v);
+        return predicate(state);
+      })
+      .sort((a, b) => b.priority - a.priority);
+  }
+
   getNodeText(nodeId: string, state: StoryState): string {
     const node = state.nodes[nodeId];
     if (!node) return '';
 
     const visited = (id: string) => (state.visitCounts[id] ?? 0) > 0;
     let text = node.text;
+
+    // Append matching text variants
+    const matchingVariants = this.getMatchingVariants(nodeId, state);
+    for (const variant of matchingVariants) {
+      if (variant.text) text += '\n\n' + variant.text;
+    }
 
     switch (nodeId) {
       case 'start': {

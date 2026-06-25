@@ -31,6 +31,12 @@ const StoryNodeSchema = new mongoose.Schema({
       required: false
     }
   }],
+  textVariants: [{
+    id: { type: String, required: true },
+    text: { type: String, required: true },
+    priority: { type: Number, default: 0 },
+    condition: { type: String, required: true }
+  }],
   visualProperties: {
     x: Number,
     y: Number,
