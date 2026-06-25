@@ -27,12 +27,10 @@ function play(sequence: string[]): StoryState {
   return state;
 }
 
-const variantIds = (nodeId: string, state: StoryState): string[] =>
-  storyLogicService.getMatchingVariants(nodeId, state).map((v) => v.id);
-
-// For nodes authored in the compositional `prose` (beats) model, the unit that
-// fires is a chosen phrasing, not a textVariant. This returns the phrasing/beat
-// id chosen for each beat (defaults included, unlike getActiveAdaptations).
+// The order-sensitive nodes are now authored in the compositional `prose`
+// (beats) model, so the unit that fires is a chosen phrasing, not a textVariant.
+// This returns the phrasing/beat id chosen for each beat (defaults included,
+// unlike getActiveAdaptations).
 const chosenIds = (nodeId: string, state: StoryState): string[] =>
   storyLogicService.renderProse(nodeId, state).chosen.map((c) => c.phrasingId ?? c.beatId);
 
@@ -40,24 +38,27 @@ describe('order-sensitive content variants fire through the real engine', () => 
   beforeEach(() => storyLogicService.reset());
 
   describe('historyStartsWith — the opening move', () => {
+    // start, echoChamber and silenceSource are now authored in the prose/beats
+    // model, so the opening move surfaces as the chosen phrasing of the `opening`
+    // / `silence-first` beats rather than a textVariant.
     it('reflects the silence opening on the anomaly, not the others', () => {
-      const ids = variantIds('start', play(['start', 'pathC', 'silenceSource']));
+      const ids = chosenIds('start', play(['start', 'pathC', 'silenceSource']));
       expect(ids).toContain('opened-with-silence');
       expect(ids).not.toContain('opened-with-whispers');
       expect(ids).not.toContain('opened-with-echoes');
     });
 
     it('reflects the whisper opening on the anomaly', () => {
-      const ids = variantIds('start', play(['start', 'pathA', 'whisperSource']));
+      const ids = chosenIds('start', play(['start', 'pathA', 'whisperSource']));
       expect(ids).toContain('opened-with-whispers');
       expect(ids).not.toContain('opened-with-silence');
     });
 
     it('marks the Null as the first descent only when silence opened the run', () => {
-      const silenceFirst = variantIds('silenceSource', play(['start', 'pathC', 'silenceSource']));
+      const silenceFirst = chosenIds('silenceSource', play(['start', 'pathC', 'silenceSource']));
       expect(silenceFirst).toContain('silence-first');
       // Same node reached, but the run opened with whispers → no "first descent".
-      const whisperFirst = variantIds(
+      const whisperFirst = chosenIds(
         'silenceSource',
         play(['start', 'pathA', 'whisperSource', 'pathC', 'silenceSource'])
       );
@@ -85,22 +86,22 @@ describe('order-sensitive content variants fire through the real engine', () => 
       expect(detoured).toContain('heard-echoes');
     });
 
-    it('fires the straight crossing into the chamber', () => {
-      const ids = variantIds(
+    it('morphs the chamber arrival to the straight crossing from the whispers', () => {
+      const ids = chosenIds(
         'echoChamber',
         play(['start', 'pathA', 'whisperSource', 'echoChamber'])
       );
       expect(ids).toContain('crossed-from-whispers');
     });
 
-    it('fires carrying a voice straight into the Null (either source)', () => {
-      const fromWhisper = variantIds(
+    it('morphs the Null arrival to a voice carried straight in (either source)', () => {
+      const fromWhisper = chosenIds(
         'silenceSource',
         play(['start', 'pathA', 'whisperSource', 'silenceSource'])
       );
       expect(fromWhisper).toContain('voice-carried-straight');
 
-      const fromEcho = variantIds(
+      const fromEcho = chosenIds(
         'silenceSource',
         play(['start', 'pathB', 'echoChamber', 'silenceSource'])
       );
