@@ -83,7 +83,10 @@ npm test           # ⚠️ NOT IMPLEMENTED — prints an error and exits 1
 
 The backend serves the built client only when `NODE_ENV=production` (it static-
 serves `client/dist`). In development the two run as separate origins and rely on
-CORS (enabled wide-open in `server/index.js`).
+CORS, which is restricted to an allow-list (`config.allowedOrigins`, from the
+`CLIENT_ORIGINS` env var; defaults to the Vite dev/preview origins in
+development). Runtime config is centralised and validated in `server/config.js`,
+which fails fast if `MONGODB_URI` is missing — see "Security notes".
 
 ## Tech stack & key versions
 
@@ -338,8 +341,22 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   real values locally. **The credential is still present in git history**, so it
   must be treated as compromised: rotate the MongoDB password in Atlas. Do **not**
   copy the old value into code, commits, PRs, or chat.
-- CORS is enabled with no allow-list (`app.use(cors())`), acceptable for local
-  dev but not for production as-is.
+- **CORS is now restricted to an allow-list.** `server/index.js` uses an `origin`
+  callback against `config.allowedOrigins` (from `CLIENT_ORIGINS`, comma-
+  separated). Development defaults to the Vite dev/preview origins; production
+  must set `CLIENT_ORIGINS` explicitly unless the API only serves the bundled
+  same-origin client. Requests with no `Origin` header (curl, health checks) pass.
+- **Env is validated at startup.** `server/config.js` loads `.env` and exits with
+  a clear message if `MONGODB_URI` is missing, rather than failing deep inside
+  mongoose. Both `index.js` and the seed read config/env through this path.
+- **CI** (`.github/workflows/ci.yml`) runs on push to `main` and on every PR:
+  the client job runs `npm ci && lint && test && build`; the server job installs
+  and syntax-checks the entry points + verifies the seed graph loads (there is no
+  server test suite yet).
+- **`node_modules` is committed to the repo** (root + `server/`, ~2000 files) —
+  pre-existing, not yet cleaned up. It bloats the tree and should be untracked
+  (`git rm -r --cached`) with a root `.gitignore` added, but that is a large,
+  separate change.
 
 ## Git workflow for assistants
 
