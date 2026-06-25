@@ -110,8 +110,13 @@ Client state lives in a **React Context + `useReducer`** store, not Redux.
 - `context/InitialState.ts` — the bundled offline-fallback story graph. It no
   longer hardcodes anything: it imports the canonical `data/storyGraph.json` and
   runs it through `storyMapper.buildStoryState`. **The graph content lives in
-  `client/src/data/storyGraph.json`** (7 nodes: `start`, `pathA`, `pathB`,
-  `whisperSource`, `echoChamber`, `convergence`, `singularity`) — see "The story
+  `client/src/data/storyGraph.json`** (14 nodes): three paths from `start` —
+  whispers (`pathA`→`whisperSource`→`whisperDepths`), echoes
+  (`pathB`→`echoChamber`→`echoDepths`), and silence (`pathC`→`silenceSource`, the
+  Null) — woven together by source↔source resonance shortcuts, plus five endings:
+  `convergence` (both sources), `singularity` (secret order echo→whisper),
+  `chorus` (all three sources), and the two order-determined endings `descent`
+  (whisper→echo→silence) and `emergence` (silence→echo→whisper). See "The story
   graph (single source of truth)" below.
 - `data/storyGraph.json` — **the single source of truth for the story graph.**
   Server-DTO shape (conditions serialized as JSON strings), so the offline
@@ -194,7 +199,13 @@ reintroduce parallel copies of the reducer or initial state.
   priority first) — see "Text variants" below. Variant predicates are compiled
   from the condition DSL once and cached by `${nodeId}::${variantId}`; the cache
   is cleared in `reset()` (call it on restart/reload — the singleton's mutable
-  once-rule + cache state survives remounts).
+  once-rule + cache state survives remounts). **Adding an ending touches three
+  places that must agree:** a `once` rule here that sets its unlock flag (order
+  endings reuse the `historyEndsWith`/`orderSeen` DSL), the `ENDING_NODE_IDS` set
+  here (so `isEnding` hides further choices), and `ENDING_UNLOCKS` in
+  `StoryProvider` (so the node + its links light up on the map when the flag
+  flips). Then add the node, a flag-gated choice from `start`, and a `start`→node
+  link in the JSON. `endingsIntegration.test.ts` covers the order endings.
 - `conditionDSL.ts` — a small **serializable** condition language. Conditions are
   authored as plain-data `ConditionSpec` objects and compiled to
   `(state) => boolean` predicates with `compileCondition`. Seven kinds: `flag`,
@@ -304,9 +315,11 @@ stores `visitCounts` and `flags` as Mongo `Map`s and a `history` string array.
   export with the context.
 - **Tests: Vitest on the client only.** `client/tests/*.test.ts` cover the pure
   logic — `conditionDSL`, `StoryReducer`, `StoryLogicService` (variants + rule
-  engine), `storyMapper`, and `graphIntegrity` (validates the canonical
+  engine), `storyMapper`, `graphIntegrity` (validates the canonical
   `data/storyGraph.json`: no dangling choice targets/links, all conditions parse,
-  unique ids, every node reachable from `start`). Run with `npm test` (config in
+  unique ids, every node reachable from `start`), and `endingsIntegration`
+  (drives playthroughs through the real reducer + rule engine and asserts the
+  order-based endings fire for the right visit orders). Run with `npm test` (config in
   `client/vitest.config.ts`, `node` environment). Tests live outside `src/` so the
   app build's `tsc` ignores them, but `eslint .` still lints them (keep them
   warning-clean). The **server** has no tests — its `test` script deliberately
