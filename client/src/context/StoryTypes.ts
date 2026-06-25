@@ -66,6 +66,11 @@ export interface StoryLink {
   color?: string;
   width?: number;
   isRevealed: boolean;
+  // Optional connective prose for the TRAVERSAL of this edge — a short bridge
+  // between the source and target sections, woven by the same beats model as
+  // node prose (so a crossing can morph by state). Used by the novel export (and
+  // the narrative page) to read less like discrete blocks. See renderTransition.
+  prose?: ProseBeat[];
 }
 
 export interface StoryState {

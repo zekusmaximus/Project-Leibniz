@@ -217,8 +217,20 @@ per visit, **repeats kept**, each faithful to how it read at that step (recency/
 order morphs included). `toMarkdown` serializes a transcript to a Markdown book
 (title, colophon/permutation fingerprint, one `## ` chapter per section).
 `NarrativePage` wires the download button. The `NovelSection.chapter` slot is
-reserved for later structure (chapter grouping, connective edge-prose). Covered by
+reserved for later structure (chapter grouping). Covered by
 `narrativeExport.test.ts`. Determinism matters: same path → same novel.
+
+### Connective edge-prose (transitions)
+
+A `StoryLink` may carry its own `prose` beats — the prose for TRAVERSING that edge,
+a short bridge between the source and target sections. `storyMapper.mapServerLink`
+parses it (same `mapServerProse` helper), and `StoryLogicService.renderTransition(
+sourceId, targetId, state)` weaves it via the shared `weaveBeats` core (so a
+crossing can morph by state — e.g. `pathB`→`echoChamber` reads differently once the
+crystal has been heard). `buildTranscript` interleaves the transition into each
+`NovelSection` (`transition?`), `toMarkdown` renders it as an italic bridge opening
+the chapter, and `NarrativePage` shows it as a muted italic lead-in above the node
+prose. `graphIntegrity` validates link prose with the same rules as node prose.
 
 ## Services layer (`client/src/services/`)
 

@@ -95,6 +95,13 @@ const NarrativePage = () => {
     : "";
   const paragraphs = currentNodeText.split(/\n{2,}/).filter((p) => p.trim().length > 0);
 
+  // Connective prose for the edge that led here (if the previous step has one) —
+  // a short bridge so the reading flows rather than jumping between blocks.
+  const prevNodeId =
+    state.history.length >= 2 ? state.history[state.history.length - 2] : undefined;
+  const transition =
+    nodeId && prevNodeId ? storyLogicService.renderTransition(prevNodeId, nodeId, state).text : '';
+
   // "Why this text?" — the adaptive fragments currently appended to the base
   // text, plus a plain-language reason each one fired. This surfaces that the
   // story is reacting to which nodes were visited and in what order.
@@ -215,6 +222,8 @@ const NarrativePage = () => {
         <h2>{getCurrentNode()?.label || ''}</h2>
         
         <div className="story-text-container">
+          {transition && <p className="story-transition"><em>{transition}</em></p>}
+
           {paragraphs.map((para, i) => (
             <p key={i}>{para}</p>
           ))}

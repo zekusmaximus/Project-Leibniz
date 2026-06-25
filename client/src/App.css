@@ -83,6 +83,13 @@
   background-color: rgba(100, 108, 255, 0.4);
 }
 
+/* Connective edge-prose: a muted italic bridge into the current passage. */
+.story-transition {
+  opacity: 0.7;
+  font-size: 0.95em;
+  margin-bottom: 1.1em;
+}
+
 /* "Why this text?" — explains which adaptive fragments fired and why. */
 .adaptations {
   margin-top: 18px;

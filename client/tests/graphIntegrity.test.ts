@@ -45,6 +45,7 @@ interface RawNode {
 interface RawLink {
   source: string;
   target: string;
+  prose?: RawBeat[];
   visualProperties?: { color?: string };
 }
 
@@ -110,39 +111,45 @@ describe('story graph integrity', () => {
     }
   });
 
-  it('every prose beat is well-formed and its conditions parse', () => {
-    for (const node of graph.nodes) {
-      const beatIds = (node.prose ?? []).map((b) => b.id);
-      expect(new Set(beatIds).size, `node ${node.id} has duplicate beat ids`).toBe(beatIds.length);
-      for (const beat of node.prose ?? []) {
-        expect(beat.id, `node ${node.id} beat id`).toBeTruthy();
-        expect(
-          (beat.phrasings ?? []).length,
-          `node ${node.id} beat ${beat.id} has phrasings`
-        ).toBeGreaterThan(0);
-        if (beat.includeWhen !== undefined) {
-          expect(parseConditionSpec(beat.includeWhen), `${node.id}/${beat.id} includeWhen`).toBeDefined();
-        }
-        // A beat must be able to render SOMETHING: either a conditionless default
-        // phrasing, or an includeWhen that gates the whole (otherwise-conditional)
-        // beat. Otherwise it can silently vanish — almost always an authoring slip.
-        const hasDefault = beat.phrasings.some((p) => p.when === undefined);
-        expect(
-          hasDefault || beat.includeWhen !== undefined,
-          `${node.id}/${beat.id} can render nothing — add a default phrasing or an includeWhen`
-        ).toBe(true);
-        const phrasingIds = beat.phrasings.map((p) => p.id).filter((id): id is string => Boolean(id));
-        expect(new Set(phrasingIds).size, `${node.id}/${beat.id} duplicate phrasing ids`).toBe(
-          phrasingIds.length
-        );
-        for (const p of beat.phrasings) {
-          expect(p.text, `${node.id}/${beat.id} phrasing text`).toBeTruthy();
-          if (p.when !== undefined) {
-            expect(parseConditionSpec(p.when), `${node.id}/${beat.id} phrasing when`).toBeDefined();
-          }
+  const checkBeats = (beats: RawBeat[] | undefined, owner: string) => {
+    const beatIds = (beats ?? []).map((b) => b.id);
+    expect(new Set(beatIds).size, `${owner} has duplicate beat ids`).toBe(beatIds.length);
+    for (const beat of beats ?? []) {
+      expect(beat.id, `${owner} beat id`).toBeTruthy();
+      expect(
+        (beat.phrasings ?? []).length,
+        `${owner} beat ${beat.id} has phrasings`
+      ).toBeGreaterThan(0);
+      if (beat.includeWhen !== undefined) {
+        expect(parseConditionSpec(beat.includeWhen), `${owner}/${beat.id} includeWhen`).toBeDefined();
+      }
+      // A beat must be able to render SOMETHING: either a conditionless default
+      // phrasing, or an includeWhen that gates the whole (otherwise-conditional)
+      // beat. Otherwise it can silently vanish — almost always an authoring slip.
+      const hasDefault = beat.phrasings.some((p) => p.when === undefined);
+      expect(
+        hasDefault || beat.includeWhen !== undefined,
+        `${owner}/${beat.id} can render nothing — add a default phrasing or an includeWhen`
+      ).toBe(true);
+      const phrasingIds = beat.phrasings.map((p) => p.id).filter((id): id is string => Boolean(id));
+      expect(new Set(phrasingIds).size, `${owner}/${beat.id} duplicate phrasing ids`).toBe(
+        phrasingIds.length
+      );
+      for (const p of beat.phrasings) {
+        expect(p.text, `${owner}/${beat.id} phrasing text`).toBeTruthy();
+        if (p.when !== undefined) {
+          expect(parseConditionSpec(p.when), `${owner}/${beat.id} phrasing when`).toBeDefined();
         }
       }
     }
+  };
+
+  it('every node prose beat is well-formed and its conditions parse', () => {
+    for (const node of graph.nodes) checkBeats(node.prose, `node ${node.id}`);
+  });
+
+  it('every link (connective) prose beat is well-formed and its conditions parse', () => {
+    for (const link of graph.links) checkBeats(link.prose, `link ${link.source}->${link.target}`);
   });
 
   it('every node is reachable from the start node via links', () => {

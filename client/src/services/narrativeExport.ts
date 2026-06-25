@@ -24,8 +24,10 @@ export interface NovelSection {
   visitNumber: number;
   /** The woven prose exactly as it read at this step. */
   text: string;
+  /** Connective edge-prose that bridges from the previous section into this one. */
+  transition?: string;
   isEnding: boolean;
-  /** Reserved for future structure (chapter grouping / connective prose). */
+  /** Reserved for future structure (chapter grouping). */
   chapter?: string;
 }
 
@@ -60,7 +62,8 @@ export function buildTranscript(state: StoryState): NovelTranscript {
   const visitNo: Record<string, number> = {};
   const sections: NovelSection[] = [];
 
-  for (const nodeId of state.history) {
+  state.history.forEach((nodeId, i) => {
+    const prevId = i > 0 ? state.history[i - 1] : undefined;
     s = storyReducer(s, { type: 'VISIT_NODE', nodeId });
 
     // Mirror the live provider: run the rule engine and apply any flag changes
@@ -72,15 +75,20 @@ export function buildTranscript(state: StoryState): NovelTranscript {
       }
     }
 
+    // The connective prose for crossing the edge that led here (if any), woven
+    // against the state at this step so a crossing can morph by what came before.
+    const transition = prevId ? logic.renderTransition(prevId, nodeId, s).text : '';
+
     visitNo[nodeId] = (visitNo[nodeId] ?? 0) + 1;
     sections.push({
       nodeId,
       label: s.nodes[nodeId]?.label ?? nodeId,
       visitNumber: visitNo[nodeId],
       text: logic.getNodeText(nodeId, s),
+      transition: transition || undefined,
       isEnding: logic.isEnding(nodeId),
     });
-  }
+  });
 
   const last = sections[sections.length - 1];
   return {
@@ -130,6 +138,11 @@ export function toMarkdown(transcript: NovelTranscript, meta: NovelMeta = {}): s
     const ret = section.visitNumber > 1 ? ` *(return ${section.visitNumber})*` : '';
     out.push(`## ${i + 1}. ${section.label}${ret}`);
     out.push('');
+    if (section.transition) {
+      // A short connective bridge into this chapter, set in italics.
+      out.push(`*${section.transition}*`);
+      out.push('');
+    }
     out.push(section.text);
     out.push('');
   });

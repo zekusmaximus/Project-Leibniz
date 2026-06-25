@@ -711,28 +711,78 @@
       "target": "pathA",
       "visualProperties": {
         "color": "#777"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You turn toward the whispers, and the anomaly lets you go — the colours peeling back into a corridor that was always waiting to be a corridor."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "start",
       "target": "pathB",
       "visualProperties": {
         "color": "#777"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You turn toward the echoes, and the anomaly lets you go with the ease of something that already knows you will be back."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "pathA",
       "target": "whisperSource",
       "visualProperties": {
         "color": "skyblue"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "The corridor of voices narrows as you follow it down, the whispers tightening toward the single point they are spoken from."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "pathB",
       "target": "echoChamber",
       "visualProperties": {
         "color": "lightgreen"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "with-whispers",
+              "priority": 10,
+              "when": "{\"kind\":\"visited\",\"node\":\"whisperSource\"}",
+              "text": "You follow the echoes inward, and now that the crystal has spoken you catch its words folded into them, each one coming back to you a little early."
+            },
+            {
+              "id": "default",
+              "text": "You follow the loudest of the echoes inward, the corridor opening into a room with space enough for them to be loud."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "whisperSource",
@@ -774,14 +824,36 @@
       "target": "whisperSource",
       "visualProperties": {
         "color": "#6a0dad"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You cross the resonance toward the whispers — the echoes thinning, with each step, into the thing they were always echoes of."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "start",
       "target": "convergence",
       "visualProperties": {
         "color": "#6a0dad"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You surrender to the braided thread, and it takes you the way the sea takes a stone it has been shaping for a long time."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "start",
@@ -795,14 +867,36 @@
       "target": "pathC",
       "visualProperties": {
         "color": "#777"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You turn toward the silence, and the anomaly does not so much let you go as stop holding you — the colours thinning to the grey of a held breath."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "pathC",
       "target": "silenceSource",
       "visualProperties": {
         "color": "#cccccc"
-      }
+      },
+      "prose": [
+        {
+          "id": "cross",
+          "phrasings": [
+            {
+              "id": "default",
+              "text": "You descend the soundless path toward the Null, each step quieter than the last, until even the idea of a step stops arriving."
+            }
+          ]
+        }
+      ]
     },
     {
       "source": "pathC",

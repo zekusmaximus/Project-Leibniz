@@ -55,6 +55,33 @@ describe('buildTranscript', () => {
   });
 });
 
+describe('connective edge-prose (transitions)', () => {
+  it('attaches the bridge for the edge that led into a section', () => {
+    const t = buildTranscript(play(['start', 'pathA', 'whisperSource']));
+    // No transition into the opening section; the descents carry their bridges.
+    expect(t.sections[0].transition).toBeUndefined();
+    expect(t.sections[1].transition).toContain('You turn toward the whispers');
+    expect(t.sections[2].transition).toContain('the whispers tightening');
+  });
+
+  it('morphs a transition by prior state', () => {
+    // pathB → echoChamber reads differently once the crystal has been heard.
+    const fresh = buildTranscript(play(['start', 'pathB', 'echoChamber']));
+    expect(fresh.sections[2].transition).toContain('space enough for them to be loud');
+
+    const afterCrystal = buildTranscript(
+      play(['start', 'pathA', 'whisperSource', 'pathA', 'start', 'pathB', 'echoChamber'])
+    );
+    const echo = afterCrystal.sections[afterCrystal.sections.length - 1];
+    expect(echo.transition).toContain('now that the crystal has spoken');
+  });
+
+  it('renders transitions as italic bridges in the Markdown', () => {
+    const md = toMarkdown(buildTranscript(play(['start', 'pathA', 'whisperSource'])));
+    expect(md).toContain('*You turn toward the whispers');
+  });
+});
+
 describe('toMarkdown', () => {
   it('renders front matter, a colophon, and a chapter per section', () => {
     const md = toMarkdown(buildTranscript(play(['start', 'whisperSource'])), {

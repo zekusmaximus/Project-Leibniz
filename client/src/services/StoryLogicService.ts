@@ -1,5 +1,5 @@
 // client/src/services/StoryLogicService.ts
-import { StoryState, TextVariant } from '../context/StoryTypes';
+import { StoryState, TextVariant, ProseBeat } from '../context/StoryTypes';
 import { compileCondition, ConditionSpec } from './conditionDSL';
 import { getVisitOrder } from './mapVisuals';
 
@@ -315,11 +315,33 @@ export class StoryLogicService {
   renderProse(nodeId: string, state: StoryState): RenderedProse {
     const node = state.nodes[nodeId];
     if (!node?.prose?.length) return { text: '', chosen: [] };
+    return this.weaveBeats(node.prose, state, nodeId);
+  }
 
+  /**
+   * Render the connective prose for TRAVERSING the edge `sourceId`→`targetId` — a
+   * short bridge between two sections, woven by the same beats model. Returns
+   * empty when the link has no prose. Lets the novel export (and the narrative
+   * page) interleave transitions so the run reads as continuous prose.
+   */
+  renderTransition(sourceId: string, targetId: string, state: StoryState): RenderedProse {
+    const link = state.links.find((l) => l.source === sourceId && l.target === targetId);
+    if (!link?.prose?.length) return { text: '', chosen: [] };
+    return this.weaveBeats(link.prose, state, `${sourceId}->${targetId}`);
+  }
+
+  /**
+   * Core beat-weaving shared by node prose and edge (transition) prose. For each
+   * beat: skip it if `includeWhen` fails; otherwise pick the highest-priority
+   * phrasing whose `when` matches (ties → author order), falling back to the
+   * conditionless default. Chosen phrasings are woven into one paragraph.
+   * `keyPrefix` namespaces the compiled-predicate cache (node id, or edge key).
+   */
+  private weaveBeats(beats: ProseBeat[], state: StoryState, keyPrefix: string): RenderedProse {
     const chosen: ChosenPhrasing[] = [];
-    for (const beat of node.prose) {
+    for (const beat of beats) {
       if (beat.includeWhen) {
-        const include = this.getProsePredicate(`${nodeId}::${beat.id}::inc`, beat.includeWhen);
+        const include = this.getProsePredicate(`${keyPrefix}::${beat.id}::inc`, beat.includeWhen);
         if (!include(state)) continue;
       }
 
@@ -327,7 +349,7 @@ export class StoryLogicService {
       beat.phrasings.forEach((phrasing, i) => {
         const eligible =
           phrasing.when === undefined ||
-          this.getProsePredicate(`${nodeId}::${beat.id}::p${i}`, phrasing.when)(state);
+          this.getProsePredicate(`${keyPrefix}::${beat.id}::p${i}`, phrasing.when)(state);
         if (!eligible) return;
         const priority = phrasing.priority ?? 0;
         // Strictly higher priority wins; ties keep the earlier (author-order) one.

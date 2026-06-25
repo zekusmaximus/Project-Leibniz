@@ -67,9 +67,12 @@ Because the engine can render a node's morphed prose for any path, your *novel* 
 just that rendering written down along your `history`.
 [`narrativeExport.ts`](./client/src/services/narrativeExport.ts) replays a run and
 captures each visited section as it read **at that step** (repeats kept), then
-serializes it to a Markdown book with front matter. The narrative page offers
-"Download your novel so far" / "Download your novel" (at endings). EPUB and an
-in-app reader are on the roadmap.
+serializes it to a Markdown book with front matter. **Connective edge-prose** —
+optional `prose` beats on a `StoryLink` — is woven in as a short italic bridge
+between sections (and shown on the narrative page), so the export reads as
+continuous prose rather than discrete blocks; a bridge can itself morph by state.
+The narrative page offers "Download your novel so far" / "Download your novel" (at
+endings). EPUB and an in-app reader are on the roadmap.
 
 ---
 

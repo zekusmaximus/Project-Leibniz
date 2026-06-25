@@ -40,6 +40,7 @@ export interface ServerNode {
 export interface ServerLink {
   source: string;
   target: string;
+  prose?: ServerProseBeat[];
   visualProperties?: { color?: string; width?: number };
   metadata?: { isHidden?: boolean };
 }
@@ -137,6 +138,7 @@ export function mapServerLink(doc: ServerLink): StoryLink {
     color: doc.visualProperties?.color,
     width: doc.visualProperties?.width,
     isRevealed: false,
+    prose: mapServerProse(doc.prose),
   };
 }
 
