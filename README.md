@@ -1,5 +1,17 @@
 # Project-Leibniz
 
+> [!IMPORTANT]
+> **Feature freeze:** Project-Leibniz is a reference implementation in the
+> [Narramorph product consolidation](https://github.com/zekusmaximus/Narramorph/blob/main/docs/eternal-return-product-consolidation-roadmap.md).
+> Do not add product features here. Only security, provenance, extraction-support,
+> and archival-preparation changes are accepted. Its condition/explanation,
+> compositional-prose, edge-prose, and journey-export ideas are being reimplemented
+> in Narramorph. This repository becomes read-only after the Phase 4 archive gate.
+
+The reviewed pre-consolidation state is preserved by tag
+`pre-consolidation-2026-07-13`. See [the baseline record](CONSOLIDATION_BASELINE.md)
+and [security notice](SECURITY.md).
+
 ### *Eternal Return of the Digital Self* — an interactive speculative-fiction experience
 
 Project-Leibniz is a web app where you read a short, strange novel by *navigating*
@@ -271,6 +283,13 @@ Mongoose stores `condition` (on choices and variants) as a **string**, and
 See [`CLAUDE.md`](./CLAUDE.md) for the full contributor guide, architectural
 gotchas (the persistent-simulation `NodeMap`, the singleton rule engine's mutable
 state, the offline-fallback path), and conventions.
+
+## License
+
+- Software source code is available under the [MIT License](LICENSE).
+- Narrative prose, expressive story data, character/world material, generated literary content, and first-party media are **all rights reserved** under the [content license](CONTENT_LICENSE.md).
+
+The MIT License does not grant permission to republish or create a separate derivative work from the reserved content.
 
 ## Tech stack
 
