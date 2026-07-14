@@ -284,6 +284,13 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full contributor guide, architectural
 gotchas (the persistent-simulation `NodeMap`, the singleton rule engine's mutable
 state, the offline-fallback path), and conventions.
 
+## License
+
+- Software source code is available under the [MIT License](LICENSE).
+- Narrative prose, expressive story data, character/world material, generated literary content, and first-party media are **all rights reserved** under the [content license](CONTENT_LICENSE.md).
+
+The MIT License does not grant permission to republish or create a separate derivative work from the reserved content.
+
 ## Tech stack
 
 **Client:** React 19 · React Router 6 · Vite 5 · TypeScript 5 (strict) · D3 7 ·
