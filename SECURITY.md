@@ -8,16 +8,17 @@ Project-Leibniz is a reference implementation and is not a supported production 
 
 A real MongoDB Atlas connection string was committed in earlier Git history. It is absent from the current tracked tree and `.env` files are ignored, but removal from the current tree does not make the historical secret safe.
 
-External status update, July 13, 2026: the owner signed in to Atlas and confirmed that the associated project and free-tier cluster still exist, appear to be running, and show no recent use. This does not confirm whether the historical database user/password remains valid. Until that database user is deleted or its password is reset, the exposed credential must still be treated as usable by an unauthorized party.
+External status update, July 13, 2026: the owner signed in to Atlas and confirmed that the associated project and free-tier cluster still existed, appeared to be running, and showed no recent use.
 
-Required owner action:
+Remediation confirmed July 13, 2026:
 
-1. delete the affected Atlas database user if the backend is retired, or reset its password to a new unique value if the user is still needed;
-2. review Atlas access/network rules and recent activity;
-3. remove unused deployment/repository secrets;
-4. record the confirmation in the Narramorph Phase 0 consolidation issue without posting the secret or replacement credential.
+1. the owner deleted the compromised SCRAM database user;
+2. the owner deleted both project IP access-list entries, including the public-internet entry; and
+3. the confirmation was recorded in the Narramorph Phase 0 consolidation issue without posting sensitive identifiers.
 
-Repository automation cannot prove external revocation. Project-Leibniz must not pass its archive gate until the owner confirms this action.
+Deleting the database user makes the historical connection string unusable. Removing the access-list entries also closes the prototype's direct network path while preserving the Atlas project, cluster, and stored data. The credential-remediation condition of the archive gate is satisfied.
+
+Unused deployment or repository secrets containing the old URI should still be removed as routine hygiene if any are later discovered; they cannot restore the deleted Atlas database identity.
 
 ## Reporting
 
